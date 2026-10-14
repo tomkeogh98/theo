@@ -4,6 +4,7 @@
 // v: vibes (cosy, adventure, creative, music, food, culture, active)
 // w: "in" | "out"   time: 1 couple of hours, 2 whole evening, 3 whole day
 // cost: 0 free, 1 a little, 2 treat   who: whose interests it leans towards
+// go: place tags (see places.js); the card then suggests a real spot nearby
 
 export const IDEAS = [
   // ── Music & vinyl ──────────────────────────────────────────────
@@ -19,7 +20,7 @@ export const IDEAS = [
     b: "Twenty minutes, £15 each, one rule: buy a record you think the other one will love but has never heard.",
     s: ["Head to the nearest record shop (or a charity shop with a vinyl crate).", "Split up, set a 20-minute timer and choose in secret.", "Go home, swap, and play both start to finish with the lights low."],
     q: "What do you think my record says about how I see you?",
-    v: ["music", "adventure"], w: "out", time: 2, cost: 1, who: ["tom", "cat"],
+    v: ["music", "adventure"], w: "out", time: 2, cost: 1, who: ["tom", "cat"], go: ["records"],
   },
   {
     id: "desert-island", e: "🏝️", t: "Desert Island Discs",
@@ -40,7 +41,7 @@ export const IDEAS = [
     b: "Find a gig tonight at a small venue by a band neither of you has heard of. Choose purely on the band name.",
     s: ["Check the listings of your nearest small venues for tonight or this week.", "Shortlist three bands by name only, no listening allowed, and pick one.", "Go, stand near the front, and buy something from the merch table if they're good."],
     q: "What's the best gig you've ever been to, and who were you with?",
-    v: ["music", "adventure"], w: "out", time: 2, cost: 1, who: ["tom"],
+    v: ["music", "adventure"], w: "out", time: 2, cost: 1, who: ["tom"], go: ["gig"],
   },
   {
     id: "open-mic", e: "🎤", t: "Open Mic Night",
@@ -96,14 +97,14 @@ export const IDEAS = [
     b: "Dress up a bit and find a jazz bar or a live music lounge. Low lights, a good drink, nobody looking at a phone.",
     s: ["Look up a jazz night, piano bar or acoustic session nearby.", "Dress slightly too nicely. That's the whole point.", "Order something you'd never normally order."],
     q: "Where do you see us in five years? Answer like a movie scene.",
-    v: ["music", "culture", "cosy"], w: "out", time: 2, cost: 2, who: ["tom", "cat"],
+    v: ["music", "culture", "cosy"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["jazz"],
   },
   {
     id: "classical-night", e: "🎻", t: "A Night at the Concert Hall",
     b: "Book cheap seats for an orchestra or choir concert. It's an evening that feels grander than it costs.",
     s: ["Check your nearest concert hall or cathedral for this week. Restricted-view seats are often a bargain.", "Read the programme notes to each other over a pre-concert drink.", "Afterwards, each pick the moment that gave you goosebumps."],
     q: "What piece of music would you want played at our wedding? (Hypothetically. Theo's listening.)",
-    v: ["music", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"],
+    v: ["music", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["classical"],
   },
   {
     id: "karaoke-duet", e: "🎙️", t: "Living Room Karaoke",
@@ -140,28 +141,28 @@ export const IDEAS = [
     b: "Go to an independent cinema and pick tonight's film only by its poster. No trailers, no reviews.",
     s: ["Find your nearest independent or arthouse cinema.", "Stand in front of the posters and agree on one in two minutes.", "Go for a drink afterwards and review it like proper critics."],
     q: "Would you rather live inside a Wes Anderson film or a Richard Curtis film?",
-    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"],
+    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"], go: ["cinema"],
   },
   {
     id: "rush-theatre", e: "🎭", t: "Last-Minute Theatre",
     b: "Many theatres sell cheap day seats, standing tickets or 'rush' tickets. Grab two for tonight and see what happens.",
     s: ["Check your nearest theatre's site or the box office for same-day tickets.", "Pick whatever's on, even if you know nothing about it.", "Debrief over chips: who was the star, and what would you change?"],
     q: "If you could be in any musical, which character would you play?",
-    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"],
+    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"], go: ["theatre"],
   },
   {
     id: "big-theatre", e: "🌹", t: "A Proper Theatre Night",
     b: "The full treat: pre-theatre dinner, good seats and an interval ice cream. Dress up properly.",
     s: ["Book a play or musical Cat has wanted to see, plus a pre-theatre menu nearby.", "Get there early enough not to rush the pudding.", "Interval rule: ice cream, and each of you predicts the ending."],
     q: "What's the most moved you've ever been by something on a stage?",
-    v: ["culture", "food"], w: "out", time: 2, cost: 2, who: ["cat"],
+    v: ["culture", "food"], w: "out", time: 2, cost: 2, who: ["cat"], go: ["theatre"],
   },
   {
     id: "fringe-theatre", e: "🍺", t: "Pub Theatre",
     b: "Find a fringe show in a room above a pub. It's small, odd, brilliant, and costs about the same as two pints.",
     s: ["Look up fringe or studio theatre nearby: rooms above pubs, arts centres, student shows.", "Go in with zero expectations.", "Afterwards, decide who'd play the two of you in the film of your life."],
     q: "What's something brave you've done that I don't know about?",
-    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"],
+    v: ["culture", "adventure"], w: "out", time: 2, cost: 1, who: ["cat"], go: ["fringe"],
   },
   {
     id: "two-hander", e: "📖", t: "Read a Play Aloud",
@@ -189,21 +190,21 @@ export const IDEAS = [
     b: "Go to a museum or gallery. Each of you picks one piece and has to sell it to the other as if it's on auction.",
     s: ["Find a free museum or gallery (many have late openings).", "Split up for 20 minutes and each choose 'your' piece.", "Lead each other to it and pitch it passionately. Then find cake."],
     q: "If we could hang one painting in our home, what would it be?",
-    v: ["culture", "creative"], w: "out", time: 2, cost: 0, who: ["cat", "tom"],
+    v: ["culture", "creative"], w: "out", time: 2, cost: 0, who: ["cat", "tom"], go: ["museum"],
   },
   {
     id: "comedy-night", e: "😂", t: "Comedy Night",
     b: "Find a stand-up or improv night. Laughing together is the most underrated date there is.",
     s: ["Look up a comedy club, new-material night or improv show this week.", "Sit near the back if you'd rather not be picked on.", "On the walk home, each do your best impression of a comedian."],
     q: "When have I made you laugh the hardest?",
-    v: ["culture"], w: "out", time: 2, cost: 1, who: ["cat", "tom"],
+    v: ["culture"], w: "out", time: 2, cost: 1, who: ["cat", "tom"], go: ["comedy"],
   },
   {
     id: "bookshop-date", e: "📚", t: "Bookshop Blind Date",
     b: "Fifteen minutes in a bookshop to buy each other a book under £10, then read the first chapter aloud in a café.",
     s: ["Head to a bookshop and split up.", "Choose a book that says 'I know you'. Wrap it in your hands so it stays a surprise.", "Swap in a café and read each other's first page aloud."],
     q: "What book changed how you see the world?",
-    v: ["culture", "cosy"], w: "out", time: 2, cost: 1, who: ["cat"],
+    v: ["culture", "cosy"], w: "out", time: 2, cost: 1, who: ["cat"], go: ["bookshop"],
   },
 
   // ── Making things (photo, film, embroidery) ────────────────────
@@ -247,7 +248,7 @@ export const IDEAS = [
     b: "Photograph each other in the last hour of sunlight. Aim for one frame each that looks like a film still.",
     s: ["Check when the sun sets and head out an hour before.", "Tom shoots Cat, then Cat shoots Tom. Direct each other like a film set.", "Pick one favourite each to print and frame."],
     q: "When do you feel most like yourself?",
-    v: ["creative", "adventure"], w: "out", time: 1, cost: 0, who: ["tom", "cat"],
+    v: ["creative", "adventure"], w: "out", time: 1, cost: 0, who: ["tom", "cat"], go: ["viewpoint"],
   },
   {
     id: "disposable-day", e: "📷", t: "The Disposable Camera Date",
@@ -396,28 +397,57 @@ export const IDEAS = [
     b: "Book a cookery class for two, like Thai, sushi or sourdough. You learn a skill, eat what you make, and come home with a new dinner.",
     s: ["Find a one-off evening class at a cookery school or local restaurant.", "Be the most enthusiastic pair there.", "Recreate the dish at home within a week so it sticks."],
     q: "What dish do you want to be famous for when we're old?",
-    v: ["food", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"],
+    v: ["food", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["cooking"],
   },
   {
     id: "new-cuisine", e: "🌶️", t: "A Cuisine You've Never Tried",
     b: "Go out for a cuisine neither of you has eaten before, like Ethiopian, Georgian or Sichuan, and order the thing you can't pronounce.",
     s: ["Search nearby for something genuinely new to you both.", "Ask the staff what they'd order, and order exactly that.", "Rate the evening on bravery, not just taste."],
     q: "What's the most adventurous thing you'd like us to try this year?",
-    v: ["food", "adventure", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"],
+    v: ["food", "adventure", "culture"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["world"],
   },
   {
     id: "market-to-plate", e: "🥕", t: "Market to Plate",
     b: "Go to a farmers' market with no plan. Buy whatever looks best, then improvise lunch together.",
     s: ["Find a farmers' market or food market this weekend.", "Each buy three things that catch your eye, under £15 in total.", "Go home and invent a lunch with them. Name the dish."],
     q: "What would our dream kitchen have in it?",
-    v: ["food", "adventure", "creative"], w: "out", time: 2, cost: 1, who: ["tom", "cat"],
+    v: ["food", "adventure", "creative"], w: "out", time: 2, cost: 1, who: ["tom", "cat"], go: ["market"],
   },
   {
     id: "fancy-picnic", e: "🧺", t: "The Overly Fancy Picnic",
     b: "A picnic, but you go all out: a tablecloth, real glasses, a candle in a jar, and a portable record player if you have one.",
     s: ["Make or buy picnic food that's slightly too posh.", "Find a spot with a view: a park, a hill, the beach.", "Stay until the sun goes down. Bring a blanket for when it gets chilly."],
     q: "What's a perfect day for you, from start to finish?",
-    v: ["food", "cosy", "adventure"], w: "out", time: 2, cost: 1, who: ["cat", "tom"],
+    v: ["food", "cosy", "adventure"], w: "out", time: 2, cost: 1, who: ["cat", "tom"], go: ["picnic"],
+  },
+
+  {
+    id: "somewhere-new", e: "✨", t: "Somewhere New for Dinner",
+    b: "Theo's sniffed out somewhere that's opened recently. Book a table, dress up a little, and order the thing you'd never cook at home.",
+    s: ["Check tonight's menu and book. New places fill up fast.", "Each of you orders something you've never had before.", "Over pudding, rate it out of ten and decide whether it's going on the 'our places' list."],
+    q: "What's a new thing you'd like us to try this month, apart from the food?",
+    v: ["food", "adventure"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["new"],
+  },
+  {
+    id: "pub-supper", e: "🔥", t: "Country Pub Supper",
+    b: "A village pub, a fire, a proper pie and a pint. Short drive, long chat.",
+    s: ["Pick a pub, ring ahead for a table near the fire, and decide who's driving.", "Order something hearty and share a pudding.", "Do a slow lap of the village afterwards before heading home."],
+    q: "What's your favourite pub memory, and who were you with?",
+    v: ["food", "cosy"], w: "out", time: 2, cost: 1, who: ["tom", "cat"], go: ["pub"],
+  },
+  {
+    id: "dinner-lovely", e: "🕯️", t: "Dinner Somewhere Lovely",
+    b: "A properly romantic dinner out. Candles, nice clothes, and no talking about work.",
+    s: ["Book somewhere with atmosphere and dress up a bit for it.", "House rule: no work talk and no phones on the table.", "Toast each other before you order. Say one thing you love about the other one right now."],
+    q: "What's a moment with me you'd happily relive?",
+    v: ["food", "culture", "cosy"], w: "out", time: 2, cost: 2, who: ["cat", "tom"], go: ["romantic"],
+  },
+  {
+    id: "cheap-and-cheerful", e: "🥡", t: "Cheap & Cheerful Supper",
+    b: "A great dinner doesn't need a big bill. Go somewhere small, buzzy and delicious.",
+    s: ["Head out early. Small places often don't take bookings.", "Order a few things and share the lot.", "Walk somewhere afterwards with the money you saved burning a hole (ice cream?)."],
+    q: "What's the best cheap meal you've ever had?",
+    v: ["food", "adventure"], w: "out", time: 1, cost: 1, who: ["tom", "cat"], go: ["cheap"],
   },
 
   // ── Adventure & local travel ───────────────────────────────────
@@ -426,7 +456,7 @@ export const IDEAS = [
     b: "Get on a local train and get off at a stop you've never visited. Find the best café, pub and view there.",
     s: ["Go to the station and pick a direction (or flip a coin for it).", "Get off at a station you've never been to.", "Your mission: one coffee, one walk, one photo of you both, and one pint or pudding."],
     q: "Where would you live if we could live anywhere?",
-    v: ["adventure", "active"], w: "out", time: 3, cost: 1, who: ["tom"],
+    v: ["adventure", "active"], w: "out", time: 3, cost: 1, who: ["tom"], go: ["train"],
   },
   {
     id: "record-coffee-photo", e: "🏙️", t: "One Record, One Coffee, One Photo",
@@ -447,14 +477,14 @@ export const IDEAS = [
     b: "Do the top three tourist things where you live, the ones locals never do. Wear a bum bag for full commitment.",
     s: ["Look up the top-rated attractions in your own town.", "Do three of them, with a terrible guidebook voice.", "Buy a postcard and write it to each other."],
     q: "What do you love about where we live?",
-    v: ["adventure", "culture"], w: "out", time: 3, cost: 1, who: ["tom", "cat"],
+    v: ["adventure", "culture"], w: "out", time: 3, cost: 1, who: ["tom", "cat"], go: ["museum"],
   },
   {
     id: "castle-day", e: "🏰", t: "Castle & Cake",
     b: "Visit a castle, ruin or stately home nearby. Walk the grounds, then judge the café's scones.",
     s: ["Find a castle, abbey, ruin or stately home within an hour.", "Invent a backstory for the portrait in the hallway.", "Do the scone test: jam first or cream first? Argue properly."],
     q: "What era would you have liked to live in?",
-    v: ["adventure", "culture"], w: "out", time: 3, cost: 2, who: ["tom", "cat"],
+    v: ["adventure", "culture"], w: "out", time: 3, cost: 2, who: ["tom", "cat"], go: ["castle"],
   },
   {
     id: "coast-day", e: "🌊", t: "Coast Day",
@@ -475,28 +505,28 @@ export const IDEAS = [
     b: "Get up before dawn, fill a flask, and watch the sunrise from the nearest hill. Back in bed by 8 if you like.",
     s: ["Check the sunrise time and set an alarm 45 minutes before it.", "Make hot chocolate in a flask and take a blanket.", "Watch it in silence for the first five minutes. Then talk."],
     q: "What are you hoping for in the next year?",
-    v: ["adventure", "cosy", "active"], w: "out", time: 1, cost: 0, who: ["tom", "cat"],
+    v: ["adventure", "cosy", "active"], w: "out", time: 1, cost: 0, who: ["tom", "cat"], go: ["viewpoint"],
   },
   {
     id: "stargazing", e: "🌌", t: "Stargazing",
     b: "Head out to the darkest spot nearby with blankets and a flask. Find a planet and make up your own constellations.",
     s: ["Check the forecast for clear skies and pick a spot away from streetlights.", "Lie on a blanket and use a stargazing app to find a planet.", "Invent a constellation each, and one of them has to be Theo."],
     q: "Do you think there's anyone out there? What would you say to them?",
-    v: ["adventure", "cosy"], w: "out", time: 2, cost: 0, who: ["tom", "cat"],
+    v: ["adventure", "cosy"], w: "out", time: 2, cost: 0, who: ["tom", "cat"], go: ["dark-sky"],
   },
   {
     id: "golden-toast", e: "🥂", t: "Golden Hour Toast",
     b: "Take something fizzy to the best viewpoint nearby and toast the sunset. Short, simple and lovely.",
     s: ["Check the sunset time and find a high spot or a waterside bench.", "Pack something fizzy and two proper glasses.", "Toast three things that went well this week."],
     q: "What's something about this week you're grateful for?",
-    v: ["cosy", "adventure"], w: "out", time: 1, cost: 1, who: ["cat", "tom"],
+    v: ["cosy", "adventure"], w: "out", time: 1, cost: 1, who: ["cat", "tom"], go: ["viewpoint"],
   },
   {
     id: "woodland-walk", e: "🍂", t: "Woodland Walk & Flask",
     b: "A slow walk in the woods with a flask of something warm. Slow down, notice things, and hold hands.",
     s: ["Pick a woodland or country park you haven't walked in.", "Phones on silent and in your pockets. Cameras allowed (Tom).", "Find the biggest tree, sit under it and share the flask."],
     q: "When do you feel most calm?",
-    v: ["adventure", "active", "cosy"], w: "out", time: 1, cost: 0, who: ["tom", "cat"],
+    v: ["adventure", "active", "cosy"], w: "out", time: 1, cost: 0, who: ["tom", "cat"], go: ["walk"],
   },
   {
     id: "charity-shop", e: "👗", t: "Charity Shop Challenge",
@@ -519,14 +549,14 @@ export const IDEAS = [
     b: "A quick swim at a lido, lake or the sea, then hot drinks and cake. Brave, bonding and very awake.",
     s: ["Find a lido or a recognised safe swim spot. Check tides and conditions and never swim alone.", "Get in together on three. Screaming is permitted.", "Warm up with a flask and the best cake you can find."],
     q: "What's something that scares you that you'd like to do anyway?",
-    v: ["active", "adventure"], w: "out", time: 1, cost: 1, who: ["tom"],
+    v: ["active", "adventure"], w: "out", time: 1, cost: 1, who: ["tom"], go: ["swim"],
   },
   {
     id: "bouldering", e: "🧗", t: "Bouldering Taster",
     b: "Go to a climbing wall for a beginners' session. You'll spot each other, cheer each other on and solve problems together.",
     s: ["Book a beginners' taster session at a bouldering centre.", "Try the same problems and coach each other through them.", "Finish with a post-climb burger. You've earned it."],
     q: "How do you like to be encouraged when something's hard?",
-    v: ["active", "adventure"], w: "out", time: 2, cost: 2, who: ["tom"],
+    v: ["active", "adventure"], w: "out", time: 2, cost: 2, who: ["tom"], go: ["climb"],
   },
   {
     id: "run-for-pancakes", e: "🥞", t: "Run for Pancakes",
@@ -561,28 +591,28 @@ export const IDEAS = [
     b: "Hike to the highest point nearby and eat a very good sandwich at the top.",
     s: ["Find the nearest hill or summit with a proper view.", "Make outrageous sandwiches the night before.", "Take a summit selfie and the same photo every year after."],
     q: "What mountain, real or metaphorical, do you want us to climb together?",
-    v: ["active", "adventure", "food"], w: "out", time: 3, cost: 0, who: ["tom"],
+    v: ["active", "adventure", "food"], w: "out", time: 3, cost: 0, who: ["tom"], go: ["viewpoint"],
   },
   {
     id: "paddle", e: "🛶", t: "Paddle Out",
     b: "Hire a kayak, canoe or paddleboard for a couple of hours. Expect a lot of teamwork and possibly a splash.",
     s: ["Find a hire spot on a river, lake or calm bay.", "Share a two-person kayak. It's a crash course in communication.", "Stop for a riverside drink if you can moor up."],
     q: "Are we better at steering together than we think?",
-    v: ["active", "adventure"], w: "out", time: 3, cost: 2, who: ["tom"],
+    v: ["active", "adventure"], w: "out", time: 3, cost: 2, who: ["tom"], go: ["punt"],
   },
   {
     id: "cycle-pub", e: "🚲", t: "Cycle to a Pub Lunch",
     b: "Plan a bike ride with a country pub halfway. Ride there, eat a roast, and roll home.",
     s: ["Pick a pub 8 to 15 miles away on quiet lanes or a cycle path.", "Ride there at chatting pace.", "Have a long lunch, then take a slow ride home with a stop for ice cream."],
     q: "What does a good life look like when we're 70?",
-    v: ["active", "adventure", "food"], w: "out", time: 3, cost: 1, who: ["tom"],
+    v: ["active", "adventure", "food"], w: "out", time: 3, cost: 1, who: ["tom"], go: ["pub"],
   },
   {
     id: "roller-disco", e: "🛼", t: "Roller Disco or Ice Rink",
     b: "Skates, cheesy music and holding hands for balance. Very silly, very romantic.",
     s: ["Find a roller disco night or an ice rink session.", "Hold hands the whole time (for safety reasons, obviously).", "Hot chocolate after, and rate each other's falls."],
     q: "When did you last feel like a kid?",
-    v: ["active", "music"], w: "out", time: 2, cost: 1, who: ["tom", "cat"],
+    v: ["active", "music"], w: "out", time: 2, cost: 1, who: ["tom", "cat"], go: ["skate"],
   },
   {
     id: "crazy-golf", e: "⛳", t: "Crazy Golf Grudge Match",
@@ -640,7 +670,7 @@ export const IDEAS = [
     b: "Go to a board game café and let the staff pick a game for you both. Snacks, strategy and a little rivalry.",
     s: ["Find a board game café nearby and book a table.", "Ask the staff to choose a game neither of you knows.", "Rematch rule: the loser can demand one more game."],
     q: "What's something you'd love us to get better at together?",
-    v: ["cosy", "culture"], w: "out", time: 2, cost: 1, who: ["cat", "tom"],
+    v: ["cosy", "culture"], w: "out", time: 2, cost: 1, who: ["cat", "tom"], go: ["games"],
   },
   {
     id: "time-capsule", e: "⏳", t: "Our Time Capsule",

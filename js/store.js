@@ -24,9 +24,9 @@ function write(key, value) {
 export const diary = {
   all: () => read(KEY, []),
   save: (entries) => write(KEY, entries),
-  add(idea) {
+  add(idea, place) {
     const entries = diary.all();
-    const entry = { key: `${Date.now()}`, id: idea.id, plannedAt: new Date().toISOString(), doneAt: null };
+    const entry = { key: `${Date.now()}`, id: idea.id, placeId: place?.id ?? null, plannedAt: new Date().toISOString(), doneAt: null };
     entries.unshift(entry);
     diary.save(entries);
     return entry;
