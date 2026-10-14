@@ -1,7 +1,9 @@
-import { IDEAS } from "./ideas.js?v=1";
-import { VIBES, deal, TIME_LABEL, COST_LABEL, WHERE_LABEL } from "./picker.js?v=1";
-import { THEO_SVG, theoLine } from "./theo.js?v=1";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=1";
+import { IDEAS } from "./ideas.js?v=2";
+import { VIBES, deal, TIME_LABEL, COST_LABEL, WHERE_LABEL } from "./picker.js?v=2";
+import { THEO_SVG, theoLine } from "./theo.js?v=2";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=2";
+import { driveMins, mapsSearch, mapsDirections } from "./places.js?v=2";
+import { initMap, showPicks, pickPlace, focusPlace, placeById } from "./map.js?v=2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -86,13 +88,24 @@ function readPrefs() {
 }
 
 // ── Dealing ──────────────────────────────────────────────────────
+// Each card in the hand is { idea, place }, where place is a real spot nearby (or null).
 const results = $("#results");
 const deck = $("#deck");
 let hand = [];
 let seen = new Set();
 let lastMode = "ask";
+const SURPRISE = { vibes: [], where: "any", time: 3, cost: 2, whose: "both" };
 
-function cardFront(idea) {
+function placeLine(place) {
+  if (!place) return "";
+  return `
+    <button type="button" class="pc-place" data-map="${place.id}">
+      <span aria-hidden="true">📍</span>
+      <span><b>${esc(place.n)}</b>${place.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(place.town)} · ~${driveMins(place.ll)} min drive · see on map</small></span>
+    </button>`;
+}
+
+function cardFront({ idea, place }) {
   const vibes = idea.v.map((v) => VIBES.find((x) => x.id === v)?.label).filter(Boolean).slice(0, 2).join(" · ");
   return `
     <div class="front-top">
@@ -101,6 +114,7 @@ function cardFront(idea) {
     </div>
     <h3>${esc(idea.t)}</h3>
     <p class="pc-blurb">${esc(idea.b)}</p>
+    ${placeLine(place)}
     <ul class="meta" aria-label="Details">
       <li>${idea.w === "in" ? "🏠" : "🚪"} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
@@ -120,14 +134,36 @@ const CARD_BACK = `
     <span class="addr">To: Tom &amp; Cat<br>The sofa, TomCat House</span>
   </div>`;
 
+function withPlaces(ideas, prefs) {
+  const avoid = new Set();
+  return ideas.map((idea) => {
+    const place = pickPlace(idea, { time: prefs.time, avoid });
+    if (place) avoid.add(place.id);
+    return { idea, place };
+  });
+}
+
+// Hungry + heading out should always put a real dinner spot on the table.
+const DINNER_TAGS = ["new", "pub", "romantic", "cheap", "world"];
+function ensureDinner(ideas, prefs) {
+  if (!prefs.vibes.includes("food") || prefs.where === "in") return ideas;
+  if (ideas.some((i) => i.go?.some((g) => DINNER_TAGS.includes(g)))) return ideas;
+  const options = ["somewhere-new", "pub-supper", "cheap-and-cheerful", "dinner-lovely"]
+    .map((id) => byId.get(id))
+    .filter((i) => i.cost <= Math.max(prefs.cost, 1) && i.time <= Math.max(prefs.time, 2));
+  if (!options.length) return ideas;
+  const pick = (prefs.cost >= 2 && options.find((i) => i.id === "somewhere-new")) || options[Math.floor(Math.random() * options.length)];
+  return [pick, ...ideas.filter((i) => i !== pick).slice(0, ideas.length - 1)];
+}
+
 function renderHand() {
   deck.classList.toggle("single", hand.length === 1);
   deck.innerHTML = hand
-    .map((idea, i) => `
+    .map((card, i) => `
       <article class="card" style="--i:${i}" data-index="${i}">
         <div class="card-inner">
           <div class="face back" aria-hidden="true">${CARD_BACK}</div>
-          <div class="face front" inert>${cardFront(idea)}</div>
+          <div class="face front" inert>${cardFront(card)}</div>
         </div>
       </article>`)
     .join("");
@@ -135,6 +171,7 @@ function renderHand() {
     await wait(650 + i * 380);
     flipUp(card);
   });
+  showPicks(hand);
 }
 
 function flipUp(card) {
@@ -144,7 +181,7 @@ function flipUp(card) {
 
 async function run(mode) {
   lastMode = mode;
-  const prefs = readPrefs();
+  const prefs = mode === "surprise" ? SURPRISE : readPrefs();
   if (mode === "ask") savedPrefs.set({ vibes: prefs.vibes, where: prefs.where, cost: prefs.cost, whose: prefs.whose });
   const recent = recentIds(diary.all());
 
@@ -152,13 +189,9 @@ async function run(mode) {
   $("#ask").disabled = $("#surprise").disabled = true;
   await wait(900);
 
-  let relaxed = false;
-  if (mode === "surprise") {
-    hand = deal(IDEAS, { vibes: [], where: "any", time: 3, cost: 2, whose: "both" }, { n: 1, recent }).picks;
-  } else {
-    ({ picks: hand, relaxed } = deal(IDEAS, prefs, { recent }));
-  }
-  seen = new Set(hand.map((i) => i.id));
+  const { picks, relaxed } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent });
+  hand = withPlaces(mode === "surprise" ? picks : ensureDinner(picks, prefs), prefs);
+  seen = new Set(hand.map((c) => c.idea.id));
 
   $("#resultsTitle").textContent = mode === "surprise" ? "Theo's wildcard" : "Theo's picks";
   $("#resultsNote").textContent = mode === "surprise" ? "No rules. Just this. Go on." : "Pick the one that makes you both grin.";
@@ -177,20 +210,24 @@ deck.addEventListener("click", async (e) => {
   const card = e.target.closest(".card");
   if (!card) return;
   const i = Number(card.dataset.index);
+  const mapBtn = e.target.closest("[data-map]");
+  if (mapBtn) return focusPlace(mapBtn.dataset.map);
   if (e.target.closest("[data-choose]")) return choose(hand[i]);
   if (!e.target.closest("[data-swap]")) return;
 
-  const prefs = lastMode === "surprise" ? { vibes: [], where: "any", time: 3, cost: 2, whose: "both" } : readPrefs();
+  const prefs = lastMode === "surprise" ? SURPRISE : readPrefs();
   let [next] = deal(IDEAS, prefs, { n: 1, recent: recentIds(diary.all()), exclude: seen }).picks;
-  if (!next) { seen = new Set(hand.map((x) => x.id)); [next] = deal(IDEAS, prefs, { n: 1, exclude: seen }).picks; }
+  if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { n: 1, exclude: seen }).picks; }
   if (!next) return;
   seen.add(next.id);
-  hand[i] = next;
+  const others = new Set(hand.filter((_, j) => j !== i).map((c) => c.place?.id).filter(Boolean));
+  hand[i] = { idea: next, place: pickPlace(next, { time: prefs.time, avoid: others }) };
   card.classList.remove("flipped");
   $(".front", card).inert = true;
   await wait(420);
-  $(".front", card).innerHTML = cardFront(next);
+  $(".front", card).innerHTML = cardFront(hand[i]);
   flipUp(card);
+  showPicks(hand);
   $("[data-swap]", card).focus();
 });
 
@@ -198,7 +235,7 @@ deck.addEventListener("click", async (e) => {
 const dlg = $("#dateDialog");
 let openEntry = null;
 
-function showIdea(idea, { fresh }) {
+function showIdea(idea, place, { fresh }) {
   dlg.innerHTML = `
     <form method="dialog" class="dlg">
       <button class="dlg-x" value="close" aria-label="Close">×</button>
@@ -210,6 +247,15 @@ function showIdea(idea, { fresh }) {
         </div>
       </div>
       <p>${esc(idea.b)}</p>
+      ${place ? `
+      <div class="dlg-place">
+        <p class="dlg-place-name"><span aria-hidden="true">📍</span> <b>${esc(place.n)}</b>, ${esc(place.town)} <small>~${driveMins(place.ll)} min drive</small></p>
+        <p>${esc(place.b)}</p>
+        <p class="pop-links">
+          <a href="${mapsDirections(place)}" target="_blank" rel="noopener">Directions ↗</a>
+          <a href="${mapsSearch(place)}" target="_blank" rel="noopener">Hours &amp; booking ↗</a>
+        </p>
+      </div>` : ""}
       <h3>The plan</h3>
       <ol class="steps">${idea.s.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
       <div class="spark"><span>Ask each other</span><p>${esc(idea.q)}</p></div>
@@ -222,10 +268,10 @@ function showIdea(idea, { fresh }) {
   dlg.showModal();
 }
 
-function choose(idea) {
-  openEntry = diary.add(idea);
+function choose({ idea, place }) {
+  openEntry = diary.add(idea, place);
   renderDiary();
-  showIdea(idea, { fresh: true });
+  showIdea(idea, place, { fresh: true });
   say(theoLine("chosen"), "happy");
   burst(36);
 }
@@ -265,7 +311,7 @@ function renderDiary() {
           <span class="pc-stamp" aria-hidden="true">${idea.e}</span>
           <div class="entry-body">
             <button type="button" class="entry-title" data-view="${e.key}">${esc(idea.t)}</button>
-            <span class="entry-date">${e.doneAt ? `Done ${fmt(e.doneAt)}` : `Picked ${fmt(e.plannedAt)}`}</span>
+            <span class="entry-date">${e.doneAt ? `Done ${fmt(e.doneAt)}` : `Picked ${fmt(e.plannedAt)}`}${placeById(e.placeId) ? ` · ${esc(placeById(e.placeId).n)}` : ""}</span>
           </div>
           <button type="button" class="btn btn-sm ${e.doneAt ? "btn-done" : "btn-ghost"}" data-done="${e.key}" aria-pressed="${!!e.doneAt}">${e.doneAt ? "Did it ✓" : "We did it!"}</button>
           <button type="button" class="entry-x" data-remove="${e.key}" aria-label="Remove ${esc(idea.t)} from the diary">×</button>
@@ -280,7 +326,7 @@ $("#diaryList").addEventListener("click", (e) => {
   const entries = diary.all();
   if (t.dataset.view) {
     const entry = entries.find((x) => x.key === t.dataset.view);
-    if (entry) showIdea(byId.get(entry.id), { fresh: false });
+    if (entry) showIdea(byId.get(entry.id), placeById(entry.placeId), { fresh: false });
   } else if (t.dataset.done) {
     const entry = entries.find((x) => x.key === t.dataset.done);
     const nowDone = !entry.doneAt;
@@ -295,6 +341,7 @@ $("#diaryList").addEventListener("click", (e) => {
 });
 
 renderDiary();
+initMap($("#map"), $("#placeList"), $("#mapChips"));
 
 // ── Confetti (paws and hearts) ───────────────────────────────────
 function burst(n, from) {

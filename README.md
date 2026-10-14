@@ -7,7 +7,9 @@ Pick a mood, where, how long, budget and whose turn it is. Theo deals three post
 Choose one, read the plan and the "ask each other" question, then go and do it. The date
 diary (stored in this browser only) tracks dates done and a weekly streak.
 
-- `js/ideas.js`: all 90 hand-written ideas (edit or add here)
+- `js/ideas.js`: all 94 hand-written ideas (edit or add here). An idea with a `go` field suggests a real place.
+- `js/places.js`: 77 real places within a short drive, each with tags, coordinates and an `isNew` flag. Home is deliberately approximate.
+- `js/map.js`: the Leaflet map (OpenStreetMap tiles), picking a place for an idea, and the "also around here" popups
 - `js/picker.js`: filtering and weighted shuffle
 - `js/theo.js`: Theo's SVG and lines (`img/theo.svg` is a copy, so keep them in sync)
 - `js/store.js`: diary in localStorage
