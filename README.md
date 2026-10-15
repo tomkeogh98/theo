@@ -7,11 +7,12 @@ Pick a mood, where, how long, budget and whose turn it is. Theo deals three post
 Choose one, read the plan and the "ask each other" question, then go and do it. The date
 diary (stored in this browser only) tracks dates done and a weekly streak.
 
-- `js/ideas.js`: all 94 hand-written ideas (edit or add here). An idea with a `go` field suggests a real place.
+- `js/ideas.js`: all 147 hand-written ideas (edit or add here). Each has moods, a setting (`in` / `outdoor` / `venue` / `out` for either), time, cost and interests; a `go` field suggests a real place.
+- `js/interests.js`: the interest list and Tom's and Cat's defaults (editable on the site via "Our interests")
 - `js/places.js`: 77 real places within a short drive, each with tags, coordinates and an `isNew` flag. Home is deliberately approximate.
 - `js/locale.js`: where Theo is looking. Home uses `places.js`. Anywhere else (Use my location, or a search via Nominatim) pulls real places live from OpenStreetMap's Overpass API, cached in the browser for 14 days.
 - `js/map.js`: the Leaflet map (OpenStreetMap tiles), picking a place for an idea, and the "also around here" popups
-- `js/picker.js`: filtering and weighted shuffle
+- `js/picker.js`: your picks are strict rules; near misses are labelled with the rule they bend
 - `js/theo.js`: Theo's SVG and lines (`img/theo.svg` is a copy, so keep them in sync)
 - `js/store.js`: diary in localStorage
 - `js/app.js`: UI
