@@ -9,6 +9,7 @@ diary (stored in this browser only) tracks dates done and a weekly streak.
 
 - `js/ideas.js`: all 94 hand-written ideas (edit or add here). An idea with a `go` field suggests a real place.
 - `js/places.js`: 77 real places within a short drive, each with tags, coordinates and an `isNew` flag. Home is deliberately approximate.
+- `js/locale.js`: where Theo is looking. Home uses `places.js`. Anywhere else (Use my location, or a search via Nominatim) pulls real places live from OpenStreetMap's Overpass API, cached in the browser for 14 days.
 - `js/map.js`: the Leaflet map (OpenStreetMap tiles), picking a place for an idea, and the "also around here" popups
 - `js/picker.js`: filtering and weighted shuffle
 - `js/theo.js`: Theo's SVG and lines (`img/theo.svg` is a copy, so keep them in sync)

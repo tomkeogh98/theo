@@ -179,13 +179,25 @@ export function km([a, b], [c, d]) {
   return 12742 * Math.asin(Math.sqrt(x));
 }
 
-// A rough drive time from home: road distance ≈ 1.3× straight line at ~50km/h,
-// plus parking, plus extra for central Oxford traffic. Rounded to 5 minutes.
-export function driveMins(ll) {
+// A rough travel time from wherever Theo is looking: walking if it's close, else
+// driving (road ≈ 1.3× straight line at ~45km/h, plus parking, plus central Oxford
+// traffic). Rounded to 5 minutes.
+export function travel(ll, from = HOME.ll) {
+  const d = km(from, ll);
+  const round5 = (m) => Math.max(5, Math.round(m / 5) * 5);
+  if (d < 1.6) return { mode: "walk", mins: round5((d * 1.3 * 60) / 4.8) };
   const inOxford = ll[0] > 51.735 && ll[0] < 51.785 && ll[1] > -1.29 && ll[1] < -1.2;
-  const mins = (km(HOME.ll, ll) * 1.3 * 60) / 50 + 4 + (inOxford ? 8 : 0);
-  return Math.max(5, Math.round(mins / 5) * 5);
+  return { mode: "drive", mins: round5((d * 1.3 * 60) / 45 + 4 + (inOxford ? 8 : 0)) };
 }
 
-export const mapsSearch = (p) => `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.n}, ${p.town}`)}`;
-export const mapsDirections = (p) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(`${p.n}, ${p.town}`)}`;
+export const travelLabel = (ll, from) => {
+  const t = travel(ll, from);
+  return `~${t.mins} min ${t.mode}`;
+};
+
+// Live places search by name centred on their exact spot (town names aren't always known).
+export const mapsSearch = (p) => p.osm
+  ? `https://www.google.com/maps/search/${encodeURIComponent(p.n)}/@${p.ll[0]},${p.ll[1]},17z`
+  : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${p.n}, ${p.town}`)}`;
+// Live (OpenStreetMap) places route to exact coordinates; hand-picked ones by name.
+export const mapsDirections = (p) => `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(p.osm ? p.ll.join(",") : `${p.n}, ${p.town}`)}`;

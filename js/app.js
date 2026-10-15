@@ -1,9 +1,10 @@
-import { IDEAS } from "./ideas.js?v=2";
-import { VIBES, deal, TIME_LABEL, COST_LABEL, WHERE_LABEL } from "./picker.js?v=2";
-import { THEO_SVG, theoLine } from "./theo.js?v=2";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=2";
-import { driveMins, mapsSearch, mapsDirections } from "./places.js?v=2";
-import { initMap, showPicks, pickPlace, focusPlace, placeById } from "./map.js?v=2";
+import { IDEAS } from "./ideas.js?v=3";
+import { VIBES, deal, TIME_LABEL, COST_LABEL, WHERE_LABEL } from "./picker.js?v=3";
+import { THEO_SVG, theoLine } from "./theo.js?v=3";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=3";
+import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=3";
+import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=3";
+import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=3";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -87,6 +88,89 @@ function readPrefs() {
   };
 }
 
+
+// ── Where are we? ────────────────────────────────────────────────
+// Home uses Theo's hand-picked list; anywhere else (GPS or a search) pulls real
+// places live from OpenStreetMap. Postcards, the map and the list all follow it.
+const locNow = $("#locNow");
+const locStatus = $("#locStatus");
+const locResults = $("#locResults");
+const locInput = $("#locInput");
+const locLabel = (l) => (l.kind === "home" ? "Home, Oxfordshire" : [l.name, l.sub].filter(Boolean).join(", "));
+
+function renderWhere() {
+  const loc = getLoc();
+  const status = getStatus();
+  locNow.textContent = locLabel(loc);
+  $("#mapWhere").textContent = loc.kind === "home" ? "home" : loc.name;
+  locStatus.textContent = status === "loading"
+    ? `Sniffing around ${loc.name}… The first visit can take up to a minute; after that it's instant.`
+    : status === "error"
+      ? "Couldn't load places just now. The ideas still work."
+      : loc.kind === "home"
+        ? "Using Theo's hand-picked spots near home."
+        : `${getPlaces().length} real places nearby, live from OpenStreetMap.`;
+  const recents = recentLocs().filter((r) => r.name !== loc.name);
+  $("#locRecent").innerHTML = [
+    loc.kind === "home" ? "" : `<button type="button" class="loc-chip" data-home>🏠 Home</button>`,
+    ...recents.map((r) => `<button type="button" class="loc-chip" data-recent="${esc(r.name)}">📍 ${esc(r.name)}</button>`),
+  ].join("");
+}
+
+$("#locRecent").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  if (b.hasAttribute("data-home")) return setLoc(HOME_LOC);
+  const r = recentLocs().find((x) => x.name === b.dataset.recent);
+  if (r) setLoc({ ...r, kind: "search" });
+});
+
+function chooseLoc(l) {
+  locResults.hidden = true;
+  locResults.innerHTML = "";
+  locInput.value = "";
+  setLoc(l);
+}
+
+async function useGps() {
+  locStatus.textContent = "Asking your browser where you are…";
+  try {
+    chooseLoc(await locate());
+  } catch (err) {
+    locStatus.textContent = err?.code === 1
+      ? "Theo needs permission to see where you are. Or just type the place."
+      : "Couldn't get your location. Try typing the place instead.";
+  }
+}
+$("#locGps").addEventListener("click", useGps);
+$("#mapGps").addEventListener("click", useGps);
+
+async function doSearch() {
+  const q = locInput.value.trim();
+  if (!q) return locInput.focus();
+  locStatus.textContent = `Looking for "${q}"…`;
+  try {
+    const rows = await searchPlaces(q);
+    if (!rows.length) { locStatus.textContent = `Theo couldn't find "${q}". Try adding the town or country?`; return; }
+    if (rows.length === 1) return chooseLoc(rows[0]);
+    locResults.innerHTML = rows
+      .map((r, i) => `<li><button type="button" data-i="${i}"><span aria-hidden="true">📍</span> <b>${esc(r.name)}</b> <small>${esc(r.sub)}</small></button></li>`)
+      .join("");
+    locResults.hidden = false;
+    locResults.onclick = (e) => { const b = e.target.closest("[data-i]"); if (b) chooseLoc(rows[Number(b.dataset.i)]); };
+    locStatus.textContent = "Which one did you mean?";
+    locResults.querySelector("button").focus();
+  } catch {
+    locStatus.textContent = "Search isn't working right now. Try again in a moment.";
+  }
+}
+$("#locGo").addEventListener("click", doSearch);
+locInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doSearch(); } });
+$("#mapChange").addEventListener("click", () => {
+  $("#whereAreWe").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
+  setTimeout(() => locInput.focus({ preventScroll: true }), calm() ? 0 : 400);
+});
+
 // ── Dealing ──────────────────────────────────────────────────────
 // Each card in the hand is { idea, place }, where place is a real spot nearby (or null).
 const results = $("#results");
@@ -96,12 +180,16 @@ let seen = new Set();
 let lastMode = "ask";
 const SURPRISE = { vibes: [], where: "any", time: 3, cost: 2, whose: "both" };
 
-function placeLine(place) {
-  if (!place) return "";
+function placeLine(place, idea) {
+  if (!place) {
+    return idea?.go && getStatus() === "loading"
+      ? `<p class="pc-place pc-place-wait"><span aria-hidden="true">🐾</span><span>Theo's still sniffing out a spot nearby…</span></p>`
+      : "";
+  }
   return `
     <button type="button" class="pc-place" data-map="${place.id}">
       <span aria-hidden="true">📍</span>
-      <span><b>${esc(place.n)}</b>${place.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(place.town)} · ~${driveMins(place.ll)} min drive · see on map</small></span>
+      <span><b>${esc(place.n)}</b>${place.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(place.osm ? place.b : place.town)} · ${travelLabel(place.ll, getLoc().ll)} · see on map</small></span>
     </button>`;
 }
 
@@ -114,7 +202,7 @@ function cardFront({ idea, place }) {
     </div>
     <h3>${esc(idea.t)}</h3>
     <p class="pc-blurb">${esc(idea.b)}</p>
-    ${placeLine(place)}
+    ${placeLine(place, idea)}
     <ul class="meta" aria-label="Details">
       <li>${idea.w === "in" ? "🏠" : "🚪"} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
@@ -188,6 +276,12 @@ async function run(mode) {
   say(theoLine("thinking"), "think");
   $("#ask").disabled = $("#surprise").disabled = true;
   await wait(900);
+  if (getStatus() === "loading") {
+    // Wait a little for places, but never hold up the ideas: cards fill in their
+    // places as soon as they arrive (see refreshHandPlaces).
+    say(`Sniffing around ${getLoc().name} first…`, "think");
+    await Promise.race([whenReady(), wait(8000)]);
+  }
 
   const { picks, relaxed } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent });
   hand = withPlaces(mode === "surprise" ? picks : ensureDinner(picks, prefs), prefs);
@@ -201,6 +295,20 @@ async function run(mode) {
   $("#ask").disabled = $("#surprise").disabled = false;
   results.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
 }
+
+function refreshHandPlaces() {
+  if (!hand.length) return;
+  const avoid = new Set();
+  const prefs = lastMode === "surprise" ? SURPRISE : readPrefs();
+  hand = hand.map(({ idea }) => {
+    const place = pickPlace(idea, { time: prefs.time, avoid });
+    if (place) avoid.add(place.id);
+    return { idea, place };
+  });
+  $$(".card", deck).forEach((card, i) => { $(".front", card).innerHTML = cardFront(hand[i]); });
+  showPicks(hand);
+}
+onChange(() => { renderWhere(); refreshHandPlaces(); });
 
 form.addEventListener("submit", (e) => { e.preventDefault(); run("ask"); });
 $("#surprise").addEventListener("click", () => run("surprise"));
@@ -249,7 +357,7 @@ function showIdea(idea, place, { fresh }) {
       <p>${esc(idea.b)}</p>
       ${place ? `
       <div class="dlg-place">
-        <p class="dlg-place-name"><span aria-hidden="true">📍</span> <b>${esc(place.n)}</b>, ${esc(place.town)} <small>~${driveMins(place.ll)} min drive</small></p>
+        <p class="dlg-place-name"><span aria-hidden="true">📍</span> <b>${esc(place.n)}</b>${place.town ? `, ${esc(place.town)}` : ""}${fresh ? ` <small>${travelLabel(place.ll, getLoc().ll)}</small>` : ""}</p>
         <p>${esc(place.b)}</p>
         <p class="pop-links">
           <a href="${mapsDirections(place)}" target="_blank" rel="noopener">Directions ↗</a>
@@ -288,6 +396,8 @@ dlg.addEventListener("close", () => {
 dlg.addEventListener("click", (e) => { if (e.target === dlg) dlg.close(); });
 
 // ── Diary ────────────────────────────────────────────────────────
+const curated = new Map(PLACES.map((p) => [p.id, p]));
+const entryPlace = (e) => e.place || curated.get(e.placeId) || null;
 const fmt = (iso) => new Date(iso).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 
 function renderDiary() {
@@ -311,7 +421,7 @@ function renderDiary() {
           <span class="pc-stamp" aria-hidden="true">${idea.e}</span>
           <div class="entry-body">
             <button type="button" class="entry-title" data-view="${e.key}">${esc(idea.t)}</button>
-            <span class="entry-date">${e.doneAt ? `Done ${fmt(e.doneAt)}` : `Picked ${fmt(e.plannedAt)}`}${placeById(e.placeId) ? ` · ${esc(placeById(e.placeId).n)}` : ""}</span>
+            <span class="entry-date">${e.doneAt ? `Done ${fmt(e.doneAt)}` : `Picked ${fmt(e.plannedAt)}`}${entryPlace(e) ? ` · ${esc(entryPlace(e).n)}` : ""}</span>
           </div>
           <button type="button" class="btn btn-sm ${e.doneAt ? "btn-done" : "btn-ghost"}" data-done="${e.key}" aria-pressed="${!!e.doneAt}">${e.doneAt ? "Did it ✓" : "We did it!"}</button>
           <button type="button" class="entry-x" data-remove="${e.key}" aria-label="Remove ${esc(idea.t)} from the diary">×</button>
@@ -326,7 +436,7 @@ $("#diaryList").addEventListener("click", (e) => {
   const entries = diary.all();
   if (t.dataset.view) {
     const entry = entries.find((x) => x.key === t.dataset.view);
-    if (entry) showIdea(byId.get(entry.id), placeById(entry.placeId), { fresh: false });
+    if (entry) showIdea(byId.get(entry.id), entryPlace(entry), { fresh: false });
   } else if (t.dataset.done) {
     const entry = entries.find((x) => x.key === t.dataset.done);
     const nowDone = !entry.doneAt;
@@ -341,7 +451,9 @@ $("#diaryList").addEventListener("click", (e) => {
 });
 
 renderDiary();
-initMap($("#map"), $("#placeList"), $("#mapChips"));
+initMap($("#map"), $("#placeList"), $("#mapChips"), $("#mapStatus"));
+renderWhere();
+resume();
 
 // ── Confetti (paws and hearts) ───────────────────────────────────
 function burst(n, from) {

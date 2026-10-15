@@ -26,7 +26,8 @@ export const diary = {
   save: (entries) => write(KEY, entries),
   add(idea, place) {
     const entries = diary.all();
-    const entry = { key: `${Date.now()}`, id: idea.id, placeId: place?.id ?? null, plannedAt: new Date().toISOString(), doneAt: null };
+    const snap = place ? { id: place.id, n: place.n, town: place.town, ll: place.ll, b: place.b, osm: !!place.osm, url: place.url || null } : null;
+    const entry = { key: `${Date.now()}`, id: idea.id, placeId: place?.id ?? null, place: snap, plannedAt: new Date().toISOString(), doneAt: null };
     entries.unshift(entry);
     diary.save(entries);
     return entry;
