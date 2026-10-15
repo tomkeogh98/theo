@@ -423,8 +423,8 @@ export const IDEAS = [
 
   {
     id: "somewhere-new", e: "✨", t: "Somewhere New for Dinner",
-    b: "Theo's sniffed out somewhere that's opened recently. Book a table, dress up a little, and order the thing you'd never cook at home.",
-    s: ["Check tonight's menu and book. New places fill up fast.", "Each of you orders something you've never had before.", "Over pudding, rate it out of ten and decide whether it's going on the 'our places' list."],
+    b: "Theo's sniffed out somewhere you've never been, maybe somewhere brand new. Book a table, dress up a little, and order the thing you'd never cook at home.",
+    s: ["Check the menu and the latest reviews, then book.", "Each of you orders something you've never had before.", "Over pudding, rate it out of ten and decide whether it's going on the 'our places' list."],
     q: "What's a new thing you'd like us to try this month, apart from the food?",
     v: ["food", "adventure"], w: "out", time: 2, cost: 2, who: ["tom", "cat"], go: ["new"],
   },
@@ -491,7 +491,7 @@ export const IDEAS = [
     b: "A day at the nearest coast: a windy walk, fish and chips on a wall, and a paddle no matter the weather.",
     s: ["Pick a beach or coastal path you haven't walked before.", "Walk until you're properly hungry, then fish and chips on the sea wall.", "Paddle in the sea, even in October. Especially in October."],
     q: "What's your favourite memory by the sea?",
-    v: ["adventure", "active", "food"], w: "out", time: 3, cost: 1, who: ["tom", "cat"],
+    v: ["adventure", "active", "food"], w: "out", time: 3, cost: 1, who: ["tom", "cat"], go: ["coast"],
   },
   {
     id: "sleep-out", e: "🏕️", t: "Sleep Under the Stars",
@@ -619,7 +619,7 @@ export const IDEAS = [
     b: "Crazy golf, bowling or an arcade, with high stakes: the loser plans the next date.",
     s: ["Pick your arena: crazy golf, bowling or a retro arcade.", "Agree on the stakes. The loser plans and pays for the next date.", "Trash talk is encouraged, but only affectionate trash talk."],
     q: "Are you more competitive than you let on?",
-    v: ["active", "adventure"], w: "out", time: 2, cost: 1, who: ["tom", "cat"],
+    v: ["active", "adventure"], w: "out", time: 2, cost: 1, who: ["tom", "cat"], go: ["minigolf"],
   },
 
   // ── Cosy & connection ──────────────────────────────────────────
