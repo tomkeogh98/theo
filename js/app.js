@@ -1,10 +1,11 @@
-import { IDEAS } from "./ideas.js?v=3";
-import { VIBES, deal, TIME_LABEL, COST_LABEL, WHERE_LABEL } from "./picker.js?v=3";
-import { THEO_SVG, theoLine } from "./theo.js?v=3";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=3";
-import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=3";
-import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=3";
-import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=3";
+import { IDEAS } from "./ideas.js?v=4";
+import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=4";
+import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=4";
+import { THEO_SVG, theoLine } from "./theo.js?v=4";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=4";
+import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=4";
+import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=4";
+import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=4";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -175,10 +176,11 @@ $("#mapChange").addEventListener("click", () => {
 // Each card in the hand is { idea, place }, where place is a real spot nearby (or null).
 const results = $("#results");
 const deck = $("#deck");
-let hand = [];
+let hand = []; // [{ idea, bends, place }]
 let seen = new Set();
 let lastMode = "ask";
-const SURPRISE = { vibes: [], where: "any", time: 3, cost: 2, whose: "both" };
+let lastPrefs = ANYTHING;
+const prefsFor = (mode) => (mode === "surprise" ? ANYTHING : readPrefs());
 
 function placeLine(place, idea) {
   if (!place) {
@@ -193,7 +195,34 @@ function placeLine(place, idea) {
     </button>`;
 }
 
-function cardFront({ idea, place }) {
+// Why Theo picked it: what it matches, or which of your rules it bends.
+const SETTING = { in: "it's a stay-at-home one", outdoor: "it's outdoors", venue: "it means going somewhere", out: "it's an outing" };
+function whyLine(idea, bendList, prefs) {
+  if (bendList.length) {
+    const msg = {
+      mood: "it's a different mood",
+      where: SETTING[idea.w],
+      budget: prefs.cost === 2 ? "it's cheaper than a treat" : prefs.cost === 0 ? "it costs a bit" : "it costs more than you said",
+      time: (prefs.time === 3 ? idea.time < 2 : idea.time < prefs.time) ? "it's shorter than you said" : "it takes longer than you said",
+    };
+    return `<p class="pc-why is-bent"><span aria-hidden="true">↯</span> Near miss: ${esc(bendList.map((b) => msg[b]).join(" and "))}</p>`;
+  }
+  const bits = [];
+  const moods = idea.v.filter((v) => prefs.vibes.includes(v)).map((v) => VIBES.find((x) => x.id === v).label);
+  if (moods.length) bits.push(moods.join(" + "));
+  if (prefs.cost === 2) bits.push("a treat");
+  if (prefs.cost === 0) bits.push("free");
+  const ints = getInterests();
+  const who = prefs.whose === "both" ? null : prefs.whose;
+  const liked = who ? idea.i.filter((x) => ints[who].includes(x)) : idea.i.filter((x) => ints.tom.includes(x) && ints.cat.includes(x));
+  if (liked.length) {
+    const what = interestById(liked[0]).label.toLowerCase();
+    bits.push(who ? `${PEOPLE[who]} loves ${what}` : `you both love ${what}`);
+  }
+  return bits.length ? `<p class="pc-why"><span aria-hidden="true">✓</span> ${esc(bits.join(" · "))}</p>` : "";
+}
+
+function cardFront({ idea, place, bends: bendList = [] }) {
   const vibes = idea.v.map((v) => VIBES.find((x) => x.id === v)?.label).filter(Boolean).slice(0, 2).join(" · ");
   return `
     <div class="front-top">
@@ -204,10 +233,11 @@ function cardFront({ idea, place }) {
     <p class="pc-blurb">${esc(idea.b)}</p>
     ${placeLine(place, idea)}
     <ul class="meta" aria-label="Details">
-      <li>${idea.w === "in" ? "🏠" : "🚪"} ${WHERE_LABEL[idea.w]}</li>
+      <li>${WHERE_EMOJI[idea.w]} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
       <li>${idea.cost ? "💷 " + COST_LABEL[idea.cost] : "✨ Free"}</li>
     </ul>
+    ${whyLine(idea, bendList, lastPrefs)}
     <p class="pc-spark"><span>Ask each other:</span> ${esc(idea.q)}</p>
     <div class="pc-actions">
       <button type="button" class="btn btn-ask btn-sm" data-choose>This one! <span aria-hidden="true">💜</span></button>
@@ -222,26 +252,27 @@ const CARD_BACK = `
     <span class="addr">To: Tom &amp; Cat<br>The sofa, TomCat House</span>
   </div>`;
 
-function withPlaces(ideas, prefs) {
+function withPlaces(picks, prefs) {
   const avoid = new Set();
-  return ideas.map((idea) => {
-    const place = pickPlace(idea, { time: prefs.time, avoid });
+  return picks.map((card) => {
+    const place = pickPlace(card.idea, { time: prefs.time, avoid });
     if (place) avoid.add(place.id);
-    return { idea, place };
+    return { ...card, place };
   });
 }
 
-// Hungry + heading out should always put a real dinner spot on the table.
-const DINNER_TAGS = ["new", "pub", "romantic", "cheap", "world"];
-function ensureDinner(ideas, prefs) {
-  if (!prefs.vibes.includes("food") || prefs.where === "in") return ideas;
-  if (ideas.some((i) => i.go?.some((g) => DINNER_TAGS.includes(g)))) return ideas;
-  const options = ["somewhere-new", "pub-supper", "cheap-and-cheerful", "dinner-lovely"]
-    .map((id) => byId.get(id))
-    .filter((i) => i.cost <= Math.max(prefs.cost, 1) && i.time <= Math.max(prefs.time, 2));
-  if (!options.length) return ideas;
-  const pick = (prefs.cost >= 2 && options.find((i) => i.id === "somewhere-new")) || options[Math.floor(Math.random() * options.length)];
-  return [pick, ...ideas.filter((i) => i !== pick).slice(0, ideas.length - 1)];
+// Hungry + going somewhere should put a real place to eat on the table, as long
+// as one fits everything else you picked.
+const DINNER_TAGS = ["new", "pub", "romantic", "cheap", "world", "treat"];
+function ensureDinner(picks, prefs) {
+  if (!prefs.vibes.includes("food") || !["venue", "any"].includes(prefs.where)) return picks;
+  if (picks.some((c) => !c.bends.length && c.idea.go?.some((g) => DINNER_TAGS.includes(g)))) return picks;
+  const options = IDEAS.filter((i) => i.go?.some((g) => DINNER_TAGS.includes(g)) && !bends(i, prefs).length && !picks.some((c) => c.idea === i));
+  if (!options.length) return picks;
+  const pick = { idea: options[Math.floor(Math.random() * options.length)], bends: [] };
+  const swapAt = picks.findIndex((c) => c.bends.length);
+  const at = swapAt >= 0 ? swapAt : picks.length - 1;
+  return picks.map((c, i) => (i === at ? pick : c));
 }
 
 function renderHand() {
@@ -269,7 +300,8 @@ function flipUp(card) {
 
 async function run(mode) {
   lastMode = mode;
-  const prefs = mode === "surprise" ? SURPRISE : readPrefs();
+  const prefs = prefsFor(mode);
+  lastPrefs = prefs;
   if (mode === "ask") savedPrefs.set({ vibes: prefs.vibes, where: prefs.where, cost: prefs.cost, whose: prefs.whose });
   const recent = recentIds(diary.all());
 
@@ -283,28 +315,29 @@ async function run(mode) {
     await Promise.race([whenReady(), wait(8000)]);
   }
 
-  const { picks, relaxed } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent });
+  const { picks, exact } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent, interests: getInterests() });
   hand = withPlaces(mode === "surprise" ? picks : ensureDinner(picks, prefs), prefs);
   seen = new Set(hand.map((c) => c.idea.id));
+  const bent = hand.filter((c) => c.bends.length).length;
 
   $("#resultsTitle").textContent = mode === "surprise" ? "Theo's wildcard" : "Theo's picks";
-  $("#resultsNote").textContent = mode === "surprise" ? "No rules. Just this. Go on." : "Pick the one that makes you both grin.";
+  $("#resultsNote").textContent = mode === "surprise"
+    ? "No rules. Just this. Go on."
+    : !bent
+      ? "Every one fits what you picked. Choose the one that makes you both grin."
+      : exact
+        ? `Only ${exact} idea${exact === 1 ? " fits" : "s fit"} everything you picked, so Theo added the closest near miss${bent > 1 ? "es" : ""} (marked).`
+        : "Nothing fits all of that exactly, so these are the closest. Each says which rule it bends.";
   results.hidden = false;
   renderHand();
-  say(theoLine(relaxed ? "relaxed" : "done"), "happy");
+  say(theoLine(bent ? "relaxed" : "done"), "happy");
   $("#ask").disabled = $("#surprise").disabled = false;
   results.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
 }
 
 function refreshHandPlaces() {
   if (!hand.length) return;
-  const avoid = new Set();
-  const prefs = lastMode === "surprise" ? SURPRISE : readPrefs();
-  hand = hand.map(({ idea }) => {
-    const place = pickPlace(idea, { time: prefs.time, avoid });
-    if (place) avoid.add(place.id);
-    return { idea, place };
-  });
+  hand = withPlaces(hand, lastPrefs);
   $$(".card", deck).forEach((card, i) => { $(".front", card).innerHTML = cardFront(hand[i]); });
   showPicks(hand);
 }
@@ -323,13 +356,14 @@ deck.addEventListener("click", async (e) => {
   if (e.target.closest("[data-choose]")) return choose(hand[i]);
   if (!e.target.closest("[data-swap]")) return;
 
-  const prefs = lastMode === "surprise" ? SURPRISE : readPrefs();
-  let [next] = deal(IDEAS, prefs, { n: 1, recent: recentIds(diary.all()), exclude: seen }).picks;
-  if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { n: 1, exclude: seen }).picks; }
+  const prefs = lastPrefs;
+  const opts = { n: 1, recent: recentIds(diary.all()), interests: getInterests() };
+  let [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks;
+  if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks; }
   if (!next) return;
-  seen.add(next.id);
+  seen.add(next.idea.id);
   const others = new Set(hand.filter((_, j) => j !== i).map((c) => c.place?.id).filter(Boolean));
-  hand[i] = { idea: next, place: pickPlace(next, { time: prefs.time, avoid: others }) };
+  hand[i] = { ...next, place: pickPlace(next.idea, { time: prefs.time, avoid: others }) };
   card.classList.remove("flipped");
   $(".front", card).inert = true;
   await wait(420);
@@ -338,6 +372,27 @@ deck.addEventListener("click", async (e) => {
   showPicks(hand);
   $("[data-swap]", card).focus();
 });
+
+// ── Our interests ────────────────────────────────────────────────
+const intDlg = $("#interestsDialog");
+
+function renderInterests() {
+  const cur = getInterests();
+  $$(".int-chips", intDlg).forEach((box) => {
+    const who = box.dataset.person;
+    box.innerHTML = INTERESTS.map((x) => `
+      <label class="chip"><input type="checkbox" value="${x.id}"${cur[who].includes(x.id) ? " checked" : ""}><span><i aria-hidden="true">${x.emoji}</i>${esc(x.label)}</span></label>`).join("");
+  });
+}
+
+intDlg.addEventListener("change", () => {
+  const next = {};
+  $$(".int-chips", intDlg).forEach((box) => (next[box.dataset.person] = $$("input:checked", box).map((x) => x.value)));
+  setInterests(next);
+});
+$("#editInterests").addEventListener("click", () => { renderInterests(); intDlg.showModal(); });
+$("#intReset").addEventListener("click", () => { resetInterests(); renderInterests(); });
+intDlg.addEventListener("click", (e) => { if (e.target === intDlg) intDlg.close(); });
 
 // ── It's a date! ─────────────────────────────────────────────────
 const dlg = $("#dateDialog");

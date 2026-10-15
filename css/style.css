@@ -910,3 +910,28 @@ kbd {
 .pop-osm { font-size: .75rem !important; font-style: italic; color: var(--ink-soft); }
 .pc-place-wait { cursor: default; font-family: var(--hand); font-size: 1.15rem; color: var(--ink-soft); }
 .pc-place-wait:hover { transform: none; }
+
+/* ── Why Theo picked it ─────────────────────────────────────────── */
+.pc-why { margin: 0 0 12px; font-size: .85rem; font-weight: 600; color: var(--grass); }
+.pc-why.is-bent { color: var(--heart); }
+
+/* ── Our interests ──────────────────────────────────────────────── */
+.link-btn {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-family: var(--body);
+  font-size: .82rem;
+  font-weight: 600;
+  color: var(--lilac-deep);
+  text-decoration: underline;
+  cursor: pointer;
+}
+.interests-dialog { width: min(860px, calc(100% - 32px)); }
+.int-intro { color: var(--ink-soft); }
+.int-cols { display: grid; gap: 8px 28px; }
+@media (min-width: 720px) { .int-cols { grid-template-columns: 1fr 1fr; } }
+.int-cols .group legend { font-size: 1.3rem; }
+.int-chips .chip span { font-size: .9rem; padding: 6px 11px; }

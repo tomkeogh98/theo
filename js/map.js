@@ -2,8 +2,8 @@
 // (home's hand-picked list, or live OpenStreetMap places anywhere else).
 // Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
 // own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=3";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=3";
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=4";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=4";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
