@@ -68,8 +68,9 @@ function sample(pool, n, wfn) {
 
 // Returns { picks: [{ idea, bends }], exact } where exact = how many ideas fit perfectly.
 // `possible` is a hard filter that is never bent (e.g. "can you start this right now?").
-export function deal(ideas, prefs, { n = 3, recent = new Set(), exclude = new Set(), interests = { tom: [], cat: [] }, possible = () => true } = {}) {
-  const wfn = (idea) => weight(idea, prefs, recent, interests);
+// `boost` multiplies an idea's chances (e.g. there's a real gig on tonight).
+export function deal(ideas, prefs, { n = 3, recent = new Set(), exclude = new Set(), interests = { tom: [], cat: [] }, possible = () => true, boost = () => 1 } = {}) {
+  const wfn = (idea) => weight(idea, prefs, recent, interests) * boost(idea);
   const avail = ideas.filter((i) => !exclude.has(i.id) && possible(i)).map((idea) => ({ idea, bends: bends(idea, prefs) }));
   const exact = avail.filter((x) => !x.bends.length);
   const picks = sample(exact, n, wfn);

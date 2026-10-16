@@ -2,7 +2,7 @@
 // via the browser's location or a place search. Away from home, real places come
 // live from OpenStreetMap (Nominatim to find the place, Overpass for what's there),
 // cached in this browser so a holiday town only loads slowly once.
-import { PLACES, HOME, km } from "./places.js?v=5";
+import { PLACES, HOME, km } from "./places.js?v=6";
 
 const LOC_KEY = "theo.loc.v1";
 const RECENT_KEY = "theo.locRecent.v1";
@@ -39,6 +39,8 @@ export const onChange = (fn) => listeners.add(fn);
 export const whenReady = () => pending || Promise.resolve();
 export const recentLocs = () => read(RECENT_KEY, []);
 function emit() { listeners.forEach((fn) => fn({ loc, places, status })); }
+// Tell everyone the places changed in place (e.g. Google ratings were added).
+export function refresh() { emit(); }
 
 function cacheKey(l) { return `${CACHE_PREFIX}${l.ll[0].toFixed(2)},${l.ll[1].toFixed(2)}`; }
 function cachedFor(l) {

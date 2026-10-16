@@ -14,6 +14,7 @@ export const CATS = {
   culture: { label: "Culture", emoji: "🏛️" },
   outdoors: { label: "Outdoors", emoji: "🌳" },
   active: { label: "Active", emoji: "🧗" },
+  events: { label: "Events", emoji: "🎟️" },
 };
 
 export const PLACES = [

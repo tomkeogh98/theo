@@ -1,12 +1,15 @@
-import { IDEAS } from "./ideas.js?v=5";
-import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=5";
-import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=5";
-import { whyNot, goByHint, momentLine, clock, startFor } from "./when.js?v=5";
-import { THEO_SVG, theoLine } from "./theo.js?v=5";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=5";
-import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=5";
-import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=5";
-import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=5";
+import { IDEAS } from "./ideas.js?v=6";
+import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=6";
+import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=6";
+import { whyNot, goByHint, momentLine, clock, startFor } from "./when.js?v=6";
+import { getKeys, setKeys, setupLink, absorbSetupLink } from "./keys.js?v=6";
+import { loadEvents, onEvents, eventsFor, eventForIdea, hasEventFor, whenLabel } from "./events.js?v=6";
+import { ratingBadge, enrich, startRatings, testGoogle } from "./ratings.js?v=6";
+import { THEO_SVG, theoLine } from "./theo.js?v=6";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=6";
+import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=6";
+import { initMap, showPicks, pickPlace, focusPlace, eventPlace, setEventMode } from "./map.js?v=6";
+import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=6";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -96,7 +99,7 @@ function renderWhen() {
   $("#nowClock").textContent = `(${clock(new Date())})`;
   $("#whenHint").textContent = momentLine(readPrefs().when, getLoc().ll);
 }
-form.addEventListener("change", (e) => { if (e.target.name === "when") renderWhen(); });
+form.addEventListener("change", (e) => { if (e.target.name === "when") { renderWhen(); setEventMode(readPrefs().when); } });
 setInterval(renderWhen, 30000);
 renderWhen();
 
@@ -113,6 +116,7 @@ const locLabel = (l) => (l.kind === "home" ? "Home, Oxfordshire" : [l.name, l.su
 function renderWhere() {
   const loc = getLoc();
   const status = getStatus();
+  const evCount = getKeys().tm ? eventsFor("plan").length : 0;
   locNow.textContent = locLabel(loc);
   $("#mapWhere").textContent = loc.kind === "home" ? "home" : loc.name;
   locStatus.textContent = status === "loading"
@@ -122,6 +126,7 @@ function renderWhere() {
       : loc.kind === "home"
         ? "Using Theo's hand-picked spots near home."
         : `${getPlaces().length} real places nearby, live from OpenStreetMap.`;
+  if (evCount && status !== "loading") locStatus.textContent += ` 🎟️ ${evCount} events coming up nearby.`;
   const recents = recentLocs().filter((r) => r.name !== loc.name);
   $("#locRecent").innerHTML = [
     loc.kind === "home" ? "" : `<button type="button" class="loc-chip" data-home>🏠 Home</button>`,
@@ -193,7 +198,9 @@ let lastMode = "ask";
 let lastPrefs = ANYTHING;
 // Surprise ignores your choices, but never the clock.
 const prefsFor = (mode) => (mode === "surprise" ? { ...ANYTHING, when: readPrefs().when } : readPrefs());
-const possibleFor = (prefs) => (idea) => !whyNot(idea, prefs.when, getLoc().ll);
+// Doable then, or there's a real event for it then (a gig at 9pm makes "Gig Roulette" doable).
+const possibleFor = (prefs) => (idea) => !whyNot(idea, prefs.when, getLoc().ll) || hasEventFor(idea, prefs.when);
+const boostFor = (prefs) => (idea) => (prefs.when !== "plan" && hasEventFor(idea, prefs.when) ? 4 : 1);
 
 // Event-type ideas get a live "what's on" search for wherever you are.
 const WHATS_ON = {
@@ -206,6 +213,17 @@ const WHATS_ON = {
   "vineyard-tasting": "vineyard tour and tasting", "spa-day": "spa day", "sunset-boat": "sunset boat trip", "roller-disco": "ice skating or roller disco",
   "market-graze": "food market", "market-to-plate": "farmers market", "busker-bingo": "street performers",
 };
+function eventLine(ev) {
+  return `
+    <div class="pc-event">
+      <button type="button" class="pc-event-main" data-map="${ev.id}">
+        <span aria-hidden="true">🎟️</span>
+        <span><b>${esc(ev.name)}</b><small>${esc(ev.venue)} · ${esc(whenLabel(ev))}${ev.price ? ` · ${esc(ev.price)}` : ""} · ${travelLabel(ev.ll, getLoc().ll)}</small></span>
+      </button>
+      <a class="pc-tickets" href="${esc(ev.url)}" target="_blank" rel="noopener">Tickets ↗</a>
+    </div>`;
+}
+
 function whatsOnLink(idea, prefs) {
   const what = WHATS_ON[idea.id];
   if (!what) return "";
@@ -225,7 +243,7 @@ function placeLine(place, idea) {
   return `
     <button type="button" class="pc-place" data-map="${place.id}">
       <span aria-hidden="true">📍</span>
-      <span><b>${esc(place.n)}</b>${place.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(place.osm ? place.b : place.town)} · ${travelLabel(place.ll, getLoc().ll)} · see on map</small></span>
+      <span><b>${esc(place.n)}</b>${place.isNew ? ` <span class="new">New</span>` : ""}${ratingBadge(place) ? ` <span class="pc-stars">${ratingBadge(place)}</span>` : ""}<small>${esc(place.osm ? place.b : place.town)} · ${travelLabel(place.ll, getLoc().ll)} · see on map</small></span>
     </button>`;
 }
 
@@ -256,7 +274,7 @@ function whyLine(idea, bendList, prefs) {
   return bits.length ? `<p class="pc-why"><span aria-hidden="true">✓</span> ${esc(bits.join(" · "))}</p>` : "";
 }
 
-function cardFront({ idea, place, bends: bendList = [] }) {
+function cardFront({ idea, place, event, bends: bendList = [] }) {
   const vibes = idea.v.map((v) => VIBES.find((x) => x.id === v)?.label).filter(Boolean).slice(0, 2).join(" · ");
   return `
     <div class="front-top">
@@ -265,14 +283,14 @@ function cardFront({ idea, place, bends: bendList = [] }) {
     </div>
     <h3>${esc(idea.t)}</h3>
     <p class="pc-blurb">${esc(idea.b)}</p>
-    ${placeLine(place, idea)}
+    ${event ? eventLine(event) : placeLine(place, idea)}
     <ul class="meta" aria-label="Details">
       <li>${WHERE_EMOJI[idea.w]} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
       <li>${idea.cost ? "💷 " + COST_LABEL[idea.cost] : "✨ Free"}</li>
-      ${(() => { const hint = goByHint(idea, lastPrefs.when, getLoc().ll); return hint ? `<li class="go-by">${esc(hint)}</li>` : ""; })()}
+      ${(() => { const hint = event ? "" : goByHint(idea, lastPrefs.when, getLoc().ll); return hint ? `<li class="go-by">${esc(hint)}</li>` : ""; })()}
     </ul>
-    ${whatsOnLink(idea, lastPrefs)}
+    ${event ? "" : whatsOnLink(idea, lastPrefs)}
     ${whyLine(idea, bendList, lastPrefs)}
     <p class="pc-spark"><span>Ask each other:</span> ${esc(idea.q)}</p>
     <div class="pc-actions">
@@ -288,12 +306,29 @@ const CARD_BACK = `
     <span class="addr">To: Tom &amp; Cat<br>The sofa, TomCat House</span>
   </div>`;
 
-function withPlaces(picks, prefs) {
-  const avoid = new Set();
+// Give each card something real: an actual event if one suits it, else a place.
+function withPlaces(picks, prefs, { keep = false } = {}) {
+  const avoid = new Set(keep ? picks.map((c) => c.place?.id).filter(Boolean) : []);
+  const avoidEv = new Set(keep ? picks.map((c) => c.event?.id).filter(Boolean) : []);
   return picks.map((card) => {
+    if (keep && (card.event || card.place || !card.idea.go && !hasEventFor(card.idea, prefs.when))) return card;
+    const ev = eventForIdea(card.idea, prefs.when, avoidEv);
+    if (ev) { avoidEv.add(ev.id); return { ...card, event: ev, place: eventPlace(ev) }; }
     const place = pickPlace(card.idea, { time: prefs.time, avoid, when: prefs.when });
     if (place) avoid.add(place.id);
-    return { ...card, place };
+    return { ...card, event: null, place };
+  });
+}
+
+// Fetch Google ratings for the places on the table, then redraw those cards.
+function rateHand() {
+  hand.forEach((c, i) => {
+    if (!c.place || c.event || c.place.g !== undefined) return;
+    enrich(c.place).then(() => {
+      if (hand[i] !== c) return;
+      const front = $$(".card", deck)[i]?.querySelector(".front");
+      if (front) front.innerHTML = cardFront(c);
+    });
   });
 }
 
@@ -328,6 +363,7 @@ function renderHand() {
     flipUp(card);
   });
   showPicks(hand);
+  rateHand();
 }
 
 function flipUp(card) {
@@ -352,8 +388,11 @@ async function run(mode) {
     await Promise.race([whenReady(), wait(8000)]);
   }
 
-  const { picks, exact } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent, interests: getInterests(), possible: possibleFor(prefs) });
+  if (getKeys().tm) await Promise.race([loadEvents(), wait(4000)]);
+  setEventMode(prefs.when);
+  const { picks, exact } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent, interests: getInterests(), possible: possibleFor(prefs), boost: boostFor(prefs) });
   hand = withPlaces(mode === "surprise" ? picks : ensureDinner(picks, prefs), prefs);
+  handLoc = locKey();
   seen = new Set(hand.map((c) => c.idea.id));
   const bent = hand.filter((c) => c.bends.length).length;
 
@@ -377,13 +416,21 @@ async function run(mode) {
   results.scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "start" });
 }
 
+// Moved somewhere new: re-pick every card's place. Same spot (ratings or events just
+// arrived): keep what's on the table and only fill gaps, so nothing reshuffles.
+let handLoc = "";
+const locKey = () => getLoc().ll.join(",");
 function refreshHandPlaces() {
   if (!hand.length) return;
-  hand = withPlaces(hand, lastPrefs);
+  const moved = locKey() !== handLoc;
+  hand = withPlaces(moved ? hand.map((c) => ({ ...c, place: null, event: null })) : hand, lastPrefs, { keep: !moved });
+  handLoc = locKey();
   $$(".card", deck).forEach((card, i) => { $(".front", card).innerHTML = cardFront(hand[i]); });
   showPicks(hand);
+  rateHand();
 }
 onChange(() => { renderWhere(); renderWhen(); refreshHandPlaces(); });
+onEvents(() => { renderWhere(); refreshHandPlaces(); });
 
 form.addEventListener("submit", (e) => { e.preventDefault(); run("ask"); });
 $("#surprise").addEventListener("click", () => run("surprise"));
@@ -394,26 +441,64 @@ deck.addEventListener("click", async (e) => {
   if (!card) return;
   const i = Number(card.dataset.index);
   const mapBtn = e.target.closest("[data-map]");
-  if (mapBtn) return focusPlace(mapBtn.dataset.map);
+  if (mapBtn) return focusPlace(hand[i].event ? hand[i].place.id : mapBtn.dataset.map);
   if (e.target.closest("[data-choose]")) return choose(hand[i]);
   if (!e.target.closest("[data-swap]")) return;
 
   const prefs = lastPrefs;
-  const opts = { n: 1, recent: recentIds(diary.all()), interests: getInterests(), possible: possibleFor(prefs) };
+  const opts = { n: 1, recent: recentIds(diary.all()), interests: getInterests(), possible: possibleFor(prefs), boost: boostFor(prefs) };
   let [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks;
   if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks; }
   if (!next) return;
   seen.add(next.idea.id);
-  const others = new Set(hand.filter((_, j) => j !== i).map((c) => c.place?.id).filter(Boolean));
-  hand[i] = { ...next, place: pickPlace(next.idea, { time: prefs.time, avoid: others, when: prefs.when }) };
+  const others = hand.filter((_, j) => j !== i);
+  [hand[i]] = withPlaces([{ ...next, place: null, event: null }], prefs);
+  if (hand[i].place && others.some((c) => c.place?.id === hand[i].place.id)) hand[i] = { ...next, event: null, place: pickPlace(next.idea, { time: prefs.time, avoid: new Set(others.map((c) => c.place?.id)), when: prefs.when }) };
   card.classList.remove("flipped");
   $(".front", card).inert = true;
   await wait(420);
   $(".front", card).innerHTML = cardFront(hand[i]);
   flipUp(card);
   showPicks(hand);
+  rateHand();
   $("[data-swap]", card).focus();
 });
+
+// ── 🔑 Connections (Ticketmaster events, Google ratings) ─────────
+const connDlg = $("#connectDialog");
+const connStatus = $("#connStatus");
+function openConnections() {
+  const k = getKeys();
+  $("#keyTm").value = k.tm || "";
+  $("#keyG").value = k.g || "";
+  connStatus.textContent = [k.tm ? "🎟️ Events connected." : "", k.g ? "⭐ Ratings connected." : ""].filter(Boolean).join(" ") || "Nothing connected yet.";
+  connDlg.showModal();
+}
+$("#openConnect").addEventListener("click", openConnections);
+$("#connSave").addEventListener("click", async () => {
+  const k = setKeys({ tm: $("#keyTm").value, g: $("#keyG").value });
+  connStatus.textContent = "Testing…";
+  const out = [];
+  if (k.tm) {
+    const evs = await loadEvents(true);
+    out.push(evs.length ? `🎟️ Events working: ${evs.length} coming up near ${getLoc().kind === "home" ? "home" : getLoc().name}.` : "🎟️ Couldn't get events with that key. Check it?");
+  }
+  if (k.g) {
+    try { await testGoogle(); out.push("⭐ Ratings working."); startRatings(); }
+    catch { out.push("⭐ Google said no to that key. Check it, and that Places API (New) is enabled?"); }
+  }
+  connStatus.textContent = out.join(" ") || "Saved (nothing connected).";
+  renderWhere();
+});
+$("#connCopy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(setupLink());
+    connStatus.textContent = "Setup link copied. Send it privately to Cat (it contains the keys) and open it once on her phone.";
+  } catch {
+    connStatus.textContent = setupLink();
+  }
+});
+connDlg.addEventListener("click", (e) => { if (e.target === connDlg) connDlg.close(); });
 
 // ── Our interests ────────────────────────────────────────────────
 const intDlg = $("#interestsDialog");
@@ -452,7 +537,12 @@ function showIdea(idea, place, { fresh }) {
         </div>
       </div>
       <p>${esc(idea.b)}</p>
-      ${place ? `
+      ${place && (place.event || place.ev) ? (() => { const ev = place.event || place.ev; return `
+      <div class="dlg-place">
+        <p class="dlg-place-name"><span aria-hidden="true">🎟️</span> <b>${esc(ev.name || place.n)}</b></p>
+        <p>${esc(ev.venue || place.b)}${ev.start ? ` · ${esc(whenLabel(new Date(ev.start) instanceof Date && ev.start.getTime ? ev : { ...ev, start: new Date(ev.start) }))}` : ""}${ev.price ? ` · ${esc(ev.price)}` : ""}</p>
+        <p class="pop-links"><a href="${esc(ev.url)}" target="_blank" rel="noopener">Tickets ↗</a> <a href="https://www.google.com/maps/dir/?api=1&destination=${(ev.ll || place.ll).join(",")}" target="_blank" rel="noopener">Directions ↗</a></p>
+      </div>`; })() : place ? `
       <div class="dlg-place">
         <p class="dlg-place-name"><span aria-hidden="true">📍</span> <b>${esc(place.n)}</b>${place.town ? `, ${esc(place.town)}` : ""}${fresh ? ` <small>${travelLabel(place.ll, getLoc().ll)}</small>` : ""}</p>
         <p>${esc(place.b)}</p>
@@ -548,7 +638,13 @@ $("#diaryList").addEventListener("click", (e) => {
 });
 
 renderDiary();
+const connected = absorbSetupLink();
 initMap($("#map"), $("#placeList"), $("#mapChips"), $("#mapStatus"));
+setEventMode(readPrefs().when);
+loadEvents();
+startRatings();
+onChange(({ status }) => { if (status === "ready") loadEvents(); });
+if (connected) say("Connected! I can see real events and star ratings now.", "happy");
 renderWhere();
 resume();
 
