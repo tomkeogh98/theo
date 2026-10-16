@@ -1,9 +1,13 @@
 // Theo's patch: a Leaflet map of real places around wherever Theo is looking
-// (home's hand-picked list, or live OpenStreetMap places anywhere else).
+// (home's hand-picked list, or live OpenStreetMap places anywhere else), plus
+// real events (Ticketmaster) and star ratings (Google) when those are connected.
 // Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
 // own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=4";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=4";
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=6";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=6";
+import { openAt, hoursLine, startFor } from "./when.js?v=6";
+import { eventsFor, onEvents, whenLabel } from "./events.js?v=6";
+import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=6";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -13,27 +17,44 @@ let map, picksLayer, baseMarker, listEl, chipsEl, statusEl;
 let popW = 290;
 let byId = new Map();
 const markers = new Map();
+const pickMarkers = new Map();
 const groups = {};
 let active = new Set(ALL);
+let sortBy = "near";
+let eventMode = "now";
+let lastLocKey = "";
+let eventPlaces = [];
 
 export const placeById = (id) => byId.get(id);
 
-// Choose a real place for an idea: matching tags, avoiding places already in the hand,
-// nudged towards new openings / well-documented independents and, for short dates,
-// somewhere close.
-export function pickPlace(idea, { time = 2, avoid = new Set() } = {}) {
+// An event, shaped like a place so the map, list and postcards can treat it the same.
+export const eventPlace = (ev) => ({ id: ev.id, n: ev.name, cat: "events", town: ev.town, ll: ev.ll, b: ev.venue, tags: [], event: ev });
+
+// Choose a real place for an idea: matching tags, avoiding places already in the hand.
+// Leans towards well-rated and new places, somewhere close for short dates, and (for
+// Right now / Tonight) places known to be open; ones known to be shut are skipped.
+export function pickPlace(idea, { time = 2, avoid = new Set(), when = "plan" } = {}) {
   if (!idea.go) return null;
   const from = getLoc().ll;
-  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id));
+  const at = when === "plan" ? null : startFor(when);
+  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id) && !(at && openAt(p, at) === false));
   if (!pool.length) return null;
-  const w = (p) => Math.max(0.2, 1 + (p.isNew ? 1.5 : 0) + (p.q || 0) * 0.6 + (time === 1 && travel(p.ll, from).mins <= 15 ? 2 : 0));
+  const w = (p) => {
+    const score = ratingScore(p);
+    return Math.max(0.15, 1 + (p.isNew ? 1.5 : 0) + (p.q || 0) * 0.6
+      + (time === 1 && travel(p.ll, from).mins <= 15 ? 2 : 0)
+      + (at && openAt(p, at) ? 1.5 : 0)
+      + (score ? (score - 4.1) * 6 : 0));
+  };
   return pool
     .map((p) => ({ p, k: Math.random() ** (1 / w(p)) }))
     .sort((a, b) => b.k - a.k)[0].p;
 }
 
+function allPoints() { return [...getPlaces(), ...eventPlaces]; }
+
 function nearby(p, n = 4) {
-  return getPlaces().filter((q) => q !== p)
+  return allPoints().filter((q) => q.id !== p.id)
     .map((q) => ({ q, d: km(p.ll, q.ll) }))
     .filter((x) => x.d < 1.6)
     .sort((a, b) => a.d - b.d)
@@ -42,23 +63,43 @@ function nearby(p, n = 4) {
 
 const metres = (d) => (d < 1 ? `${Math.max(50, Math.round((d * 1000) / 50) * 50)}m` : `${d.toFixed(1)}km`);
 
+function eventPopup(p) {
+  const ev = p.event;
+  return `
+    <div class="pop">
+      <p class="pop-cat">🎟️ ${esc(ev.genre || "Event")}</p>
+      <h3>${esc(ev.name)}</h3>
+      <p class="pop-when"><b>${esc(whenLabel(ev))}</b>${ev.price ? ` · ${esc(ev.price)}` : ""}</p>
+      <p class="pop-where">${esc(ev.venue)}${ev.town ? `, ${esc(ev.town)}` : ""} · ${travelLabel(ev.ll, getLoc().ll)}</p>
+      <p class="pop-links">
+        <a href="${esc(ev.url)}" target="_blank" rel="noopener">Tickets ↗</a>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${ev.ll.join(",")}" target="_blank" rel="noopener">Directions ↗</a>
+      </p>
+      <p class="pop-osm">Listing from Ticketmaster.</p>
+    </div>`;
+}
+
 function popupHtml(p) {
+  if (p.event) return eventPopup(p);
   const near = nearby(p);
+  const stars = ratingBadge(p);
+  const hours = hoursLine(p);
   return `
     <div class="pop">
       <p class="pop-cat">${CATS[p.cat].emoji} ${CATS[p.cat].label}${p.isNew ? ` <span class="new">New</span>` : ""}</p>
       <h3>${esc(p.n)}</h3>
+      ${stars ? `<p class="pop-stars">${stars} <small>on Google</small></p>` : p.g === undefined && p.loading ? `<p class="pop-stars muted">⭐ Checking reviews…</p>` : ""}
       <p class="pop-where">${p.town ? `${esc(p.town)} · ` : ""}${travelLabel(p.ll, getLoc().ll)}</p>
       <p>${esc(p.b)}</p>
-      ${p.hours ? `<p class="pop-hours">🕰️ ${esc(p.hours)}</p>` : ""}
+      ${hours ? `<p class="pop-hours"><b>${hours}</b></p>` : ""}
       <p class="pop-links">
         <a href="${mapsDirections(p)}" target="_blank" rel="noopener">Directions ↗</a>
-        <a href="${mapsSearch(p)}" target="_blank" rel="noopener">Reviews &amp; hours ↗</a>
+        <a href="${p.g?.uri ? esc(p.g.uri) : mapsSearch(p)}" target="_blank" rel="noopener">${stars ? "Read reviews" : "Reviews &amp; hours"} ↗</a>
         ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
       </p>
-      ${p.osm ? `<p class="pop-osm">Found on OpenStreetMap, not vetted by Theo. Check reviews first.</p>` : ""}
+      ${p.osm && !stars ? `<p class="pop-osm">Found on OpenStreetMap, not vetted by Theo.</p>` : ""}
       ${near.length ? `<p class="pop-near">Also around here</p><div class="pop-near-list">${near
-        .map(({ q, d }) => `<button type="button" data-goto="${q.id}">${CATS[q.cat].emoji} ${esc(q.n)} <small>${metres(d)}</small></button>`)
+        .map(({ q, d }) => `<button type="button" data-goto="${q.id}">${CATS[q.cat].emoji} ${esc(q.n)} <small>${ratingBadge(q, { short: true }) || metres(d)}</small></button>`)
         .join("")}</div>` : ""}
     </div>`;
 }
@@ -70,6 +111,11 @@ const pinIcon = (p) => L.divIcon({
   iconAnchor: [16, 16],
   popupAnchor: [0, -14],
 });
+
+function bindGoto(popup) {
+  popup.getElement()?.querySelectorAll("[data-goto]").forEach((b) =>
+    b.addEventListener("click", () => focusPlace(b.dataset.goto, { scroll: false })));
+}
 
 export function initMap(el, list, chips, status) {
   listEl = list;
@@ -91,10 +137,20 @@ export function initMap(el, list, chips, status) {
   for (const cat of ALL) groups[cat] = L.layerGroup().addTo(map);
   picksLayer = L.layerGroup().addTo(map);
 
-  // "Also around here" buttons inside popups hop to that place.
+  // Popups: wire up "Also around here", and fetch Google ratings the first time.
   map.on("popupopen", (e) => {
-    e.popup.getElement().querySelectorAll("[data-goto]").forEach((b) =>
-      b.addEventListener("click", () => focusPlace(b.dataset.goto, { scroll: false })));
+    bindGoto(e.popup);
+    const p = e.popup._theoPlace;
+    if (p && !p.event && p.g === undefined) {
+      p.loading = true;
+      e.popup.setContent(popupHtml(p));
+      bindGoto(e.popup);
+      enrich(p).then(() => {
+        p.loading = false;
+        if (e.popup.isOpen()) { e.popup.setContent(popupHtml(p)); bindGoto(e.popup); }
+        renderList();
+      });
+    }
   });
 
   chipsEl.addEventListener("click", onChip);
@@ -102,9 +158,25 @@ export function initMap(el, list, chips, status) {
     const b = e.target.closest("[data-goto]");
     if (b) focusPlace(b.dataset.goto, { scroll: false });
   });
+  listEl.closest(".place-panel")?.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-sort]");
+    if (!b) return;
+    sortBy = b.dataset.sort;
+    b.parentElement.querySelectorAll("[data-sort]").forEach((x) => x.setAttribute("aria-pressed", x === b));
+    renderList();
+  });
 
   onChange(rebuild);
+  onEvents(() => drawEvents());
   rebuild();
+}
+
+function addMarker(p) {
+  const m = L.marker(p.ll, { icon: pinIcon(p), title: p.n, alt: p.n, riseOnHover: true });
+  m.bindPopup(() => popupHtml(p), { maxWidth: popW, autoPanPadding: [16, 16] });
+  m.getPopup()._theoPlace = p;
+  m.addTo(groups[p.cat]);
+  markers.set(p.id, m);
 }
 
 // Category chips: a plain tap shows just that category (tap it again for everything);
@@ -138,7 +210,7 @@ function applyFilter() {
 
 function renderChips() {
   const counts = {};
-  getPlaces().forEach((p) => (counts[p.cat] = (counts[p.cat] || 0) + 1));
+  allPoints().forEach((p) => (counts[p.cat] = (counts[p.cat] || 0) + 1));
   const all = active.size === ALL.length;
   chipsEl.classList.toggle("filtered", !all);
   chipsEl.innerHTML = `<button type="button" class="map-chip chip-all" data-cat="all" aria-pressed="${all}">All</button>` +
@@ -149,10 +221,12 @@ function rebuild() {
   if (!map) return;
   const loc = getLoc();
   const places = getPlaces();
-  byId = new Map(places.map((p) => [p.id, p]));
+  const locKey = `${loc.ll[0]},${loc.ll[1]}`;
+  const sameSpot = locKey === lastLocKey;
+  lastLocKey = locKey;
+  byId = new Map([...places, ...eventPlaces].map((p) => [p.id, p]));
   markers.clear();
   for (const cat of ALL) groups[cat].clearLayers();
-  picksLayer.clearLayers();
   baseMarker?.remove();
   baseMarker = L.marker(loc.ll, {
     icon: L.divIcon({ className: "", html: `<span class="pin pin-home">${loc.kind === "home" ? "🏠" : "📍"}</span>`, iconSize: [40, 40], iconAnchor: [20, 20] }),
@@ -160,14 +234,9 @@ function rebuild() {
     keyboard: false,
     interactive: false,
   }).addTo(map);
-
-  for (const p of places) {
-    const m = L.marker(p.ll, { icon: pinIcon(p), title: p.n, alt: p.n, riseOnHover: true })
-      .bindPopup(() => popupHtml(p), { maxWidth: popW, autoPanPadding: [16, 16] });
-    m.addTo(groups[p.cat]);
-    markers.set(p.id, m);
-  }
-  active = new Set(ALL);
+  places.forEach(addMarker);
+  eventPlaces.forEach(addMarker);
+  if (!sameSpot) { active = new Set(ALL); picksLayer.clearLayers(); }
   applyFilter();
 
   const status = getStatus();
@@ -178,25 +247,54 @@ function rebuild() {
       ? `Theo couldn't reach the map database just now. Ideas still work; try again in a minute.`
       : `Theo couldn't find much around ${loc.name}. Try a bigger town nearby?`;
 
-  // Frame the nearest 40 places plus where you are.
-  const near = places.map((p) => ({ p, d: km(loc.ll, p.ll) })).sort((a, b) => a.d - b.d).slice(0, 40).map((x) => x.p.ll);
-  if (near.length) map.fitBounds(L.latLngBounds([loc.ll, ...near]), { padding: [24, 24], maxZoom: 14 });
-  else map.setView(loc.ll, 12);
+  // New spot: frame the nearest 40 places plus where you are. Same spot: leave the view alone.
+  if (!sameSpot) {
+    const near = places.map((p) => ({ p, d: km(loc.ll, p.ll) })).sort((a, b) => a.d - b.d).slice(0, 40).map((x) => x.p.ll);
+    if (near.length) map.fitBounds(L.latLngBounds([loc.ll, ...near]), { padding: [24, 24], maxZoom: 14 });
+    else map.setView(loc.ll, 12);
+  }
+}
+
+// Events follow "When?": soon (Right now), this evening (Tonight) or two weeks (Plan ahead).
+export function setEventMode(mode) {
+  eventMode = mode;
+  drawEvents();
+}
+function drawEvents() {
+  if (!map) return;
+  // One pin per venue: the soonest event there.
+  const byVenue = new Map();
+  for (const ev of eventsFor(eventMode)) if (!byVenue.has(ev.venue)) byVenue.set(ev.venue, ev);
+  eventPlaces = [...byVenue.values()].map(eventPlace);
+  groups.events.clearLayers();
+  for (const [id] of [...markers]) if (id.startsWith("tm-")) markers.delete(id);
+  eventPlaces.forEach((p) => { byId.set(p.id, p); addMarker(p); });
+  if (!active.has("events")) map.removeLayer(groups.events);
+  renderChips();
+  renderList();
 }
 
 function renderList() {
   const from = getLoc().ll;
-  const rows = getPlaces().filter((p) => active.has(p.cat))
-    .map((p) => ({ p, t: travel(p.ll, from), d: km(from, p.ll) }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, 150);
+  let rows = allPoints().filter((p) => active.has(p.cat))
+    .map((p) => ({ p, t: travel(p.ll, from), d: km(from, p.ll), s: ratingScore(p) }));
+  rows = sortBy === "top"
+    ? rows.sort((a, b) => (b.s ?? -1) - (a.s ?? -1) || a.d - b.d)
+    : rows.sort((a, b) => a.d - b.d);
+  rows = rows.slice(0, 150);
   listEl.innerHTML = rows.length
-    ? rows.map(({ p, t }) => `
+    ? rows.map(({ p, t }) => {
+        const extra = p.event
+          ? ` · ${esc(whenLabel(p.event))}`
+          : `${openAt(p) === true ? " · 🟢 open now" : openAt(p) === false ? " · closed now" : ""}`;
+        const stars = ratingBadge(p, { short: true });
+        return `
       <li><button type="button" data-goto="${p.id}">
         <span class="li-emoji" aria-hidden="true">${CATS[p.cat].emoji}</span>
-        <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.osm ? p.b : p.town)}</small></span>
-        <span class="li-mins">${t.mins} min ${t.mode === "walk" ? "🚶" : "🚗"}</span>
-      </button></li>`).join("")
+        <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.event ? p.b : p.osm ? p.b : p.town)}${extra}</small></span>
+        <span class="li-mins">${stars ? `<b class="li-stars">${stars}</b>` : ""}${t.mins} min ${t.mode === "walk" ? "🚶" : "🚗"}</span>
+      </button></li>`;
+      }).join("")
     : `<li class="li-empty">${getStatus() === "loading" ? "Sniffing…" : "Nothing here yet."}</li>`;
 }
 
@@ -204,16 +302,21 @@ function renderList() {
 export function showPicks(hand) {
   if (!map) return;
   picksLayer.clearLayers();
+  pickMarkers.clear();
   const pts = [];
   hand.forEach(({ place }, i) => {
     if (!place) return;
+    if (!byId.has(place.id)) byId.set(place.id, place);
     pts.push(place.ll);
-    L.marker(place.ll, {
+    const m = L.marker(place.ll, {
       icon: L.divIcon({ className: "", html: `<span class="pin pin-pick">${hand.length > 1 ? i + 1 : "★"}</span>`, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -18] }),
       zIndexOffset: 1000,
       title: place.n,
       alt: `Theo's pick: ${place.n}`,
-    }).bindPopup(() => popupHtml(place), { maxWidth: popW, autoPanPadding: [16, 16] }).addTo(picksLayer);
+    }).bindPopup(() => popupHtml(place), { maxWidth: popW, autoPanPadding: [16, 16] });
+    m.getPopup()._theoPlace = place;
+    m.addTo(picksLayer);
+    pickMarkers.set(place.id, m);
   });
   if (pts.length) map.fitBounds(L.latLngBounds([getLoc().ll, ...pts]), { padding: [56, 56], maxZoom: 14 });
 }
@@ -225,5 +328,5 @@ export function focusPlace(id, { scroll = true } = {}) {
   if (scroll) document.getElementById("mapSection").scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
   if (!active.has(p.cat)) { active.add(p.cat); applyFilter(); }
   map.setView(p.ll, Math.max(map.getZoom(), 15), { animate: !calm });
-  setTimeout(() => markers.get(id)?.openPopup(), scroll && !calm ? 500 : 60);
+  setTimeout(() => (markers.get(id) || pickMarkers.get(id))?.openPopup(), scroll && !calm ? 500 : 60);
 }

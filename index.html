@@ -10,15 +10,15 @@
   <meta property="og:title" content="Theo's Date Night">
   <meta property="og:description" content="Tell Theo the vibe. He'll deal you three date ideas.">
   <meta property="og:image" content="https://tomkeogh98.github.io/theo/img/us.jpg">
-  <link rel="icon" href="img/theo.svg?v=4" type="image/svg+xml">
-  <link rel="apple-touch-icon" href="img/theo-180.png?v=4">
+  <link rel="icon" href="img/theo.svg?v=6" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="img/theo-180.png?v=6">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=Fraunces:opsz,wght,SOFT,WONK@9..144,400..900,0..100,0..1&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" crossorigin="anonymous">
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=6">
   <script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
-  <script type="module" src="js/app.js?v=4"></script>
+  <script type="module" src="js/app.js?v=6"></script>
 </head>
 <body>
   <header class="masthead">
@@ -45,7 +45,7 @@
 
       <figure class="us">
         <div class="us-card">
-          <img src="img/us.jpg?v=4" width="1050" height="1400"
+          <img src="img/us.jpg?v=6" width="1050" height="1400"
                alt="Tom and Cat on a wooden deck above the sea. Cat is in a lilac dress, Tom in a cream suit, under a big grey sky.">
           <span class="stamp" aria-hidden="true"><span data-theo></span></span>
           <span class="postmark" aria-hidden="true"><span>TomCat</span><span>est. us</span></span>
@@ -70,8 +70,18 @@
           <p class="loc-status" id="locStatus" aria-live="polite"></p>
         </fieldset>
 
+        <fieldset class="group when">
+          <legend>When?</legend>
+          <div class="seg">
+            <label><input type="radio" name="when" value="now" checked><span>🕐 Right now <b class="now-clock" id="nowClock"></b></span></label>
+            <label><input type="radio" name="when" value="tonight"><span>🌙 Tonight</span></label>
+            <label><input type="radio" name="when" value="plan"><span>📅 Plan ahead</span></label>
+          </div>
+          <p class="when-hint" id="whenHint" aria-live="polite"></p>
+        </fieldset>
+
         <fieldset class="group">
-          <legend>Tonight we're feeling… <small>(pick any)</small></legend>
+          <legend>We're feeling… <small>(pick any)</small></legend>
           <div class="chips" id="vibes"></div>
         </fieldset>
 
@@ -156,7 +166,13 @@
           <p class="map-status" id="mapStatus" aria-live="polite" hidden></p>
         </div>
         <div class="place-panel">
-          <h3>Nearest first</h3>
+          <div class="panel-head">
+            <h3>Around here</h3>
+            <div class="list-sort" role="group" aria-label="Sort">
+              <button type="button" data-sort="near" aria-pressed="true">Nearest</button>
+              <button type="button" data-sort="top" aria-pressed="false">⭐ Top rated</button>
+            </div>
+          </div>
           <ol class="place-list" id="placeList"></ol>
         </div>
       </div>
@@ -175,10 +191,25 @@
 
   <footer class="foot">
     <p>Made for Tom &amp; Cat <span aria-hidden="true">💜</span> Theo approved <span aria-hidden="true">🐾</span></p>
-    <p class="small">Your diary lives in this browser only.</p>
+    <p class="small">Your diary lives in this browser only. <button type="button" class="link-btn" id="openConnect">🔑 Connections</button></p>
   </footer>
 
   <dialog class="date-dialog" id="dateDialog" aria-labelledby="dlgTitle"></dialog>
+  <dialog class="date-dialog" id="connectDialog" aria-labelledby="connTitle">
+    <form method="dialog" class="dlg">
+      <button class="dlg-x" value="close" aria-label="Close">×</button>
+      <p class="eyebrow">Live data</p>
+      <h2 id="connTitle">Connections</h2>
+      <p class="int-intro">Optional keys that let Theo show real events and star ratings. They're saved only in this browser, never on the website.</p>
+      <label class="conn-field"><span>🎟️ Ticketmaster key <small>(real gigs, theatre &amp; comedy)</small></span><input id="keyTm" autocomplete="off" spellcheck="false"></label>
+      <label class="conn-field"><span>⭐ Google Maps key <small>(ratings, prices &amp; opening hours)</small></span><input id="keyG" autocomplete="off" spellcheck="false"></label>
+      <p class="conn-status" id="connStatus" aria-live="polite"></p>
+      <div class="dlg-actions">
+        <button type="button" class="btn btn-ask" id="connSave">Save &amp; test</button>
+        <button type="button" class="btn btn-ghost" id="connCopy">Copy setup link for another device</button>
+      </div>
+    </form>
+  </dialog>
   <dialog class="date-dialog interests-dialog" id="interestsDialog" aria-labelledby="intTitle">
     <form method="dialog" class="dlg">
       <button class="dlg-x" value="close" aria-label="Close">×</button>

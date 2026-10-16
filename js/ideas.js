@@ -924,7 +924,7 @@ export const IDEAS = [
     b: "Three puddings in three different places. A gelato, a slice of cake and something warm with custard.",
     s: ["Plan a route between three places with great puddings.", "Share one dessert at each stop.", "Crown a winner and go back for a whole one next time."],
     q: "Sweet or savoury person, and what does that say about you?",
-    v: ["food", "adventure"], w: "venue", time: 1, cost: 1, i: ["eating-out"], go: ["cheap"],
+    v: ["food", "adventure"], w: "venue", time: 1, cost: 1, i: ["eating-out"],
   },
   {
     id: "brunch-new", e: "🥞", t: "Brunch Somewhere New",
