@@ -2,8 +2,9 @@
 // (home's hand-picked list, or live OpenStreetMap places anywhere else).
 // Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
 // own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=4";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=4";
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=5";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=5";
+import { openAt, hoursLine, startFor } from "./when.js?v=5";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -21,12 +22,14 @@ export const placeById = (id) => byId.get(id);
 // Choose a real place for an idea: matching tags, avoiding places already in the hand,
 // nudged towards new openings / well-documented independents and, for short dates,
 // somewhere close.
-export function pickPlace(idea, { time = 2, avoid = new Set() } = {}) {
+// For "Right now" / "Tonight", places known to be shut then are skipped and open ones preferred.
+export function pickPlace(idea, { time = 2, avoid = new Set(), when = "plan" } = {}) {
   if (!idea.go) return null;
   const from = getLoc().ll;
-  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id));
+  const at = when === "plan" ? null : startFor(when);
+  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id) && !(at && openAt(p, at) === false));
   if (!pool.length) return null;
-  const w = (p) => Math.max(0.2, 1 + (p.isNew ? 1.5 : 0) + (p.q || 0) * 0.6 + (time === 1 && travel(p.ll, from).mins <= 15 ? 2 : 0));
+  const w = (p) => Math.max(0.2, 1 + (p.isNew ? 1.5 : 0) + (p.q || 0) * 0.6 + (time === 1 && travel(p.ll, from).mins <= 15 ? 2 : 0) + (at && openAt(p, at) ? 1.5 : 0));
   return pool
     .map((p) => ({ p, k: Math.random() ** (1 / w(p)) }))
     .sort((a, b) => b.k - a.k)[0].p;
@@ -50,7 +53,7 @@ function popupHtml(p) {
       <h3>${esc(p.n)}</h3>
       <p class="pop-where">${p.town ? `${esc(p.town)} · ` : ""}${travelLabel(p.ll, getLoc().ll)}</p>
       <p>${esc(p.b)}</p>
-      ${p.hours ? `<p class="pop-hours">🕰️ ${esc(p.hours)}</p>` : ""}
+      ${p.hours ? `<p class="pop-hours">${hoursLine(p) ? `<b>${hoursLine(p)}</b><br>` : ""}<small>${esc(p.hours)}</small></p>` : ""}
       <p class="pop-links">
         <a href="${mapsDirections(p)}" target="_blank" rel="noopener">Directions ↗</a>
         <a href="${mapsSearch(p)}" target="_blank" rel="noopener">Reviews &amp; hours ↗</a>
@@ -194,7 +197,7 @@ function renderList() {
     ? rows.map(({ p, t }) => `
       <li><button type="button" data-goto="${p.id}">
         <span class="li-emoji" aria-hidden="true">${CATS[p.cat].emoji}</span>
-        <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.osm ? p.b : p.town)}</small></span>
+        <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.osm ? p.b : p.town)}${openAt(p) === true ? " · 🟢 open now" : openAt(p) === false ? " · closed now" : ""}</small></span>
         <span class="li-mins">${t.mins} min ${t.mode === "walk" ? "🚶" : "🚗"}</span>
       </button></li>`).join("")
     : `<li class="li-empty">${getStatus() === "loading" ? "Sniffing…" : "Nothing here yet."}</li>`;

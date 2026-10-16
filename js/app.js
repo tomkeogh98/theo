@@ -1,11 +1,12 @@
-import { IDEAS } from "./ideas.js?v=4";
-import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=4";
-import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=4";
-import { THEO_SVG, theoLine } from "./theo.js?v=4";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=4";
-import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=4";
-import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=4";
-import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=4";
+import { IDEAS } from "./ideas.js?v=5";
+import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=5";
+import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=5";
+import { whyNot, goByHint, momentLine, clock, startFor } from "./when.js?v=5";
+import { THEO_SVG, theoLine } from "./theo.js?v=5";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=5";
+import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=5";
+import { initMap, showPicks, pickPlace, focusPlace } from "./map.js?v=5";
+import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=5";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -86,8 +87,18 @@ function readPrefs() {
     time: Number(fd.get("time")),
     cost: Number(fd.get("cost")),
     whose: fd.get("whose"),
+    when: fd.get("when") || "now",
   };
 }
+
+// ── When? ────────────────────────────────────────────────────────
+function renderWhen() {
+  $("#nowClock").textContent = `(${clock(new Date())})`;
+  $("#whenHint").textContent = momentLine(readPrefs().when, getLoc().ll);
+}
+form.addEventListener("change", (e) => { if (e.target.name === "when") renderWhen(); });
+setInterval(renderWhen, 30000);
+renderWhen();
 
 
 // ── Where are we? ────────────────────────────────────────────────
@@ -180,7 +191,30 @@ let hand = []; // [{ idea, bends, place }]
 let seen = new Set();
 let lastMode = "ask";
 let lastPrefs = ANYTHING;
-const prefsFor = (mode) => (mode === "surprise" ? ANYTHING : readPrefs());
+// Surprise ignores your choices, but never the clock.
+const prefsFor = (mode) => (mode === "surprise" ? { ...ANYTHING, when: readPrefs().when } : readPrefs());
+const possibleFor = (prefs) => (idea) => !whyNot(idea, prefs.when, getLoc().ll);
+
+// Event-type ideas get a live "what's on" search for wherever you are.
+const WHATS_ON = {
+  "gig-roulette": "gigs", "open-mic": "open mic night", "jazz-bar": "live jazz", "classical-night": "classical concert",
+  "rush-theatre": "theatre", "big-theatre": "theatre shows", "fringe-theatre": "fringe theatre", "comedy-night": "comedy night",
+  "poster-cinema": "cinema listings", "matinee": "cinema listings", "museum-late": "museum late opening", "open-air-show": "open air theatre or cinema",
+  "lunchtime-concert": "lunchtime concert", "piano-nightcap": "live piano bar", "dance-class": "beginners dance class",
+  "life-drawing": "life drawing class", "improv-taster": "improv class", "cooking-class": "cooking class", "pottery-class": "pottery taster class",
+  "escape-room": "escape room", "treetop-adventure": "high ropes course", "countryside-hack": "beginner horse riding",
+  "vineyard-tasting": "vineyard tour and tasting", "spa-day": "spa day", "sunset-boat": "sunset boat trip", "roller-disco": "ice skating or roller disco",
+  "market-graze": "food market", "market-to-plate": "farmers market", "busker-bingo": "street performers",
+};
+function whatsOnLink(idea, prefs) {
+  const what = WHATS_ON[idea.id];
+  if (!what) return "";
+  const loc = getLoc();
+  const near = loc.kind === "home" ? "Oxford" : loc.name;
+  const whenWord = prefs.when === "plan" ? "this week" : prefs.when === "tonight" || startFor(prefs.when).getHours() >= 16 ? "tonight" : "today";
+  const q = `${what} ${whenWord} near ${near}`;
+  return `<a class="pc-whatson" href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener">🔎 What's on ${esc(whenWord)} near ${esc(near)} ↗</a>`;
+}
 
 function placeLine(place, idea) {
   if (!place) {
@@ -236,7 +270,9 @@ function cardFront({ idea, place, bends: bendList = [] }) {
       <li>${WHERE_EMOJI[idea.w]} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
       <li>${idea.cost ? "💷 " + COST_LABEL[idea.cost] : "✨ Free"}</li>
+      ${(() => { const hint = goByHint(idea, lastPrefs.when, getLoc().ll); return hint ? `<li class="go-by">${esc(hint)}</li>` : ""; })()}
     </ul>
+    ${whatsOnLink(idea, lastPrefs)}
     ${whyLine(idea, bendList, lastPrefs)}
     <p class="pc-spark"><span>Ask each other:</span> ${esc(idea.q)}</p>
     <div class="pc-actions">
@@ -255,7 +291,7 @@ const CARD_BACK = `
 function withPlaces(picks, prefs) {
   const avoid = new Set();
   return picks.map((card) => {
-    const place = pickPlace(card.idea, { time: prefs.time, avoid });
+    const place = pickPlace(card.idea, { time: prefs.time, avoid, when: prefs.when });
     if (place) avoid.add(place.id);
     return { ...card, place };
   });
@@ -267,7 +303,8 @@ const DINNER_TAGS = ["new", "pub", "romantic", "cheap", "world", "treat"];
 function ensureDinner(picks, prefs) {
   if (!prefs.vibes.includes("food") || !["venue", "any"].includes(prefs.where)) return picks;
   if (picks.some((c) => !c.bends.length && c.idea.go?.some((g) => DINNER_TAGS.includes(g)))) return picks;
-  const options = IDEAS.filter((i) => i.go?.some((g) => DINNER_TAGS.includes(g)) && !bends(i, prefs).length && !picks.some((c) => c.idea === i));
+  const possible = possibleFor(prefs);
+  const options = IDEAS.filter((i) => i.go?.some((g) => DINNER_TAGS.includes(g)) && possible(i) && !bends(i, prefs).length && !picks.some((c) => c.idea === i));
   if (!options.length) return picks;
   const pick = { idea: options[Math.floor(Math.random() * options.length)], bends: [] };
   const swapAt = picks.findIndex((c) => c.bends.length);
@@ -315,19 +352,24 @@ async function run(mode) {
     await Promise.race([whenReady(), wait(8000)]);
   }
 
-  const { picks, exact } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent, interests: getInterests() });
+  const { picks, exact } = deal(IDEAS, prefs, { n: mode === "surprise" ? 1 : 3, recent, interests: getInterests(), possible: possibleFor(prefs) });
   hand = withPlaces(mode === "surprise" ? picks : ensureDinner(picks, prefs), prefs);
   seen = new Set(hand.map((c) => c.idea.id));
   const bent = hand.filter((c) => c.bends.length).length;
 
   $("#resultsTitle").textContent = mode === "surprise" ? "Theo's wildcard" : "Theo's picks";
-  $("#resultsNote").textContent = mode === "surprise"
-    ? "No rules. Just this. Go on."
-    : !bent
-      ? "Every one fits what you picked. Choose the one that makes you both grin."
-      : exact
-        ? `Only ${exact} idea${exact === 1 ? " fits" : "s fit"} everything you picked, so Theo added the closest near miss${bent > 1 ? "es" : ""} (marked).`
-        : "Nothing fits all of that exactly, so these are the closest. Each says which rule it bends.";
+  const moment = prefs.when === "plan" ? "" : prefs.when === "tonight" && new Date().getHours() < 19.5
+    ? "All doable tonight. "
+    : `All doable from ${clock(startFor(prefs.when))}. `;
+  $("#resultsNote").textContent = !hand.length
+    ? "Nothing Theo knows fits right now. Try Plan ahead, or loosen a choice or two."
+    : moment + (mode === "surprise"
+      ? "No other rules. Just this. Go on."
+      : !bent
+        ? "Every one fits what you picked."
+        : exact
+          ? `Only ${exact} idea${exact === 1 ? " fits" : "s fit"} everything you picked, so Theo added the closest near miss${bent > 1 ? "es" : ""} (marked).`
+          : "Nothing fits all of that exactly, so these are the closest. Each says which rule it bends.");
   results.hidden = false;
   renderHand();
   say(theoLine(bent ? "relaxed" : "done"), "happy");
@@ -341,7 +383,7 @@ function refreshHandPlaces() {
   $$(".card", deck).forEach((card, i) => { $(".front", card).innerHTML = cardFront(hand[i]); });
   showPicks(hand);
 }
-onChange(() => { renderWhere(); refreshHandPlaces(); });
+onChange(() => { renderWhere(); renderWhen(); refreshHandPlaces(); });
 
 form.addEventListener("submit", (e) => { e.preventDefault(); run("ask"); });
 $("#surprise").addEventListener("click", () => run("surprise"));
@@ -357,13 +399,13 @@ deck.addEventListener("click", async (e) => {
   if (!e.target.closest("[data-swap]")) return;
 
   const prefs = lastPrefs;
-  const opts = { n: 1, recent: recentIds(diary.all()), interests: getInterests() };
+  const opts = { n: 1, recent: recentIds(diary.all()), interests: getInterests(), possible: possibleFor(prefs) };
   let [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks;
   if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks; }
   if (!next) return;
   seen.add(next.idea.id);
   const others = new Set(hand.filter((_, j) => j !== i).map((c) => c.place?.id).filter(Boolean));
-  hand[i] = { ...next, place: pickPlace(next.idea, { time: prefs.time, avoid: others }) };
+  hand[i] = { ...next, place: pickPlace(next.idea, { time: prefs.time, avoid: others, when: prefs.when }) };
   card.classList.remove("flipped");
   $(".front", card).inert = true;
   await wait(420);
