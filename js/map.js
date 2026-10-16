@@ -3,11 +3,11 @@
 // real events (Ticketmaster) and star ratings (Google) when those are connected.
 // Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
 // own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=6";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=6";
-import { openAt, hoursLine, startFor } from "./when.js?v=6";
-import { eventsFor, onEvents, whenLabel } from "./events.js?v=6";
-import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=6";
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=7";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=7";
+import { openAt, hoursLine, startFor, latestStart } from "./when.js?v=7";
+import { eventsFor, onEvents, whenLabel } from "./events.js?v=7";
+import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=7";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -37,7 +37,16 @@ export function pickPlace(idea, { time = 2, avoid = new Set(), when = "plan" } =
   if (!idea.go) return null;
   const from = getLoc().ll;
   const at = when === "plan" ? null : startFor(when);
-  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id) && !(at && openAt(p, at) === false));
+  const deadline = latestStart(idea, when, from);
+  // Right now / Tonight: you have to be able to get there before it's too late, and it
+  // mustn't be known to be shut when you arrive.
+  const reachable = (p) => {
+    if (!at) return true;
+    const arrive = new Date(at.getTime() + travel(p.ll, from).mins * 60e3);
+    if (deadline && arrive > deadline) return false;
+    return openAt(p, arrive) !== false;
+  };
+  const pool = getPlaces().filter((p) => p.tags.some((t) => idea.go.includes(t)) && !avoid.has(p.id) && reachable(p));
   if (!pool.length) return null;
   const w = (p) => {
     const score = ratingScore(p);

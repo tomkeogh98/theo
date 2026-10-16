@@ -1,15 +1,16 @@
-import { IDEAS } from "./ideas.js?v=6";
-import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=6";
-import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=6";
-import { whyNot, goByHint, momentLine, clock, startFor } from "./when.js?v=6";
-import { getKeys, setKeys, setupLink, absorbSetupLink } from "./keys.js?v=6";
-import { loadEvents, onEvents, eventsFor, eventForIdea, hasEventFor, whenLabel } from "./events.js?v=6";
-import { ratingBadge, enrich, startRatings, testGoogle } from "./ratings.js?v=6";
-import { THEO_SVG, theoLine } from "./theo.js?v=6";
-import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=6";
-import { PLACES, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=6";
-import { initMap, showPicks, pickPlace, focusPlace, eventPlace, setEventMode } from "./map.js?v=6";
-import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=6";
+import { IDEAS } from "./ideas.js?v=7";
+import { VIBES, deal, bends, ANYTHING, COST_LABEL, WHERE_LABEL, WHERE_EMOJI } from "./picker.js?v=7";
+import { INTERESTS, PEOPLE, interestById, getInterests, setInterests, resetInterests } from "./interests.js?v=7";
+import { whyNot, goByHint, leaveBy, momentLine, clock, startFor } from "./when.js?v=7";
+import { getKeys, setKeys, setupLink, absorbSetupLink } from "./keys.js?v=7";
+import { loadEvents, onEvents, eventsFor, eventForIdea, hasEventFor, whenLabel } from "./events.js?v=7";
+import { ratingBadge, enrich, startRatings, testGoogle } from "./ratings.js?v=7";
+import { hoursLine } from "./when.js?v=7";
+import { THEO_SVG, theoLine } from "./theo.js?v=7";
+import { diary, savedPrefs, recentIds, weekStreak } from "./store.js?v=7";
+import { PLACES, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=7";
+import { initMap, showPicks, pickPlace, focusPlace, eventPlace, setEventMode } from "./map.js?v=7";
+import { getLoc, getPlaces, getStatus, onChange, setLoc, resume, whenReady, searchPlaces, locate, recentLocs, HOME_LOC } from "./locale.js?v=7";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -17,7 +18,7 @@ const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&
 const byId = new Map(IDEAS.map((i) => [i.id, i]));
 const calm = () => matchMedia("(prefers-reduced-motion: reduce)").matches;
 const wait = (ms) => new Promise((r) => setTimeout(r, calm() ? 0 : ms));
-const SHORT_TIME = { 1: "2 hrs", 2: "Evening", 3: "All day" };
+const SHORT_TIME = { 1: "1–2 hrs", 2: "3–4 hrs", 3: "All day" };
 
 // ── Theo ─────────────────────────────────────────────────────────
 $$("[data-theo]").forEach((el) => (el.innerHTML = THEO_SVG));
@@ -44,18 +45,21 @@ function greet(now = new Date()) {
   const weekend = [0, 6].includes(now.getDay());
   if (h < 5) return ["Still up, Tom & Cat?", "Something small and cosy, then bed. Theo's already asleep on your side."];
   if (h < 12) return weekend
-    ? [`${day} morning, Tom & Cat.`, "A whole day's stretching out ahead of you. Let Theo fill it."]
-    : ["Morning, Tom & Cat.", "Planning tonight already? Theo loves a plan almost as much as breakfast."];
+    ? [`${day} morning, Tom & Cat.`, "A whole day's stretching out ahead of you. Tell Theo the vibe and he'll find something to do right now."]
+    : ["Morning, Tom & Cat.", "Something to do right now, or planning tonight? Pick When, tell Theo the vibe, and go."];
   if (h < 17) return weekend
     ? [`${day} afternoon, Tom & Cat.`, "Plenty of day left. Tell Theo the vibe and go."]
-    : [`${day} afternoon, Tom & Cat.`, "Get tonight sorted now, so there's nothing to decide later."];
+    : [`${day} afternoon, Tom & Cat.`, "Free right now, or sorting tonight? Pick When and tell Theo the vibe."];
   if (now.getDay() === 5) return ["It's Friday night, Tom & Cat.", "Week's done. Tell Theo the vibe and he'll deal you three ideas."];
   if (weekend) return [`${day} night, Tom & Cat.`, "Tell Theo the vibe, pick a postcard, then close the laptop and go and do it."];
   return [`${day} night, Tom & Cat.`, "School-night dates count double. Tell Theo the vibe."];
 }
-const [hello, lede] = greet();
-$("#greeting").textContent = hello;
-$("#lede").textContent = lede;
+function renderGreeting() {
+  const [hello, lede] = greet();
+  $("#greeting").textContent = hello;
+  $("#lede").textContent = lede;
+}
+renderGreeting();
 
 // ── Picker ───────────────────────────────────────────────────────
 const form = $("#picker");
@@ -96,6 +100,7 @@ function readPrefs() {
 
 // ── When? ────────────────────────────────────────────────────────
 function renderWhen() {
+  renderGreeting();
   $("#nowClock").textContent = `(${clock(new Date())})`;
   $("#whenHint").textContent = momentLine(readPrefs().when, getLoc().ll);
 }
@@ -124,7 +129,7 @@ function renderWhere() {
     : status === "error"
       ? "Couldn't load places just now. The ideas still work."
       : loc.kind === "home"
-        ? "Using Theo's hand-picked spots near home."
+        ? `Using Theo's hand-picked spots near home${getKeys().g ? ", plus Google's most popular" : ""}.`
         : `${getPlaces().length} real places nearby, live from OpenStreetMap.`;
   if (evCount && status !== "loading") locStatus.textContent += ` 🎟️ ${evCount} events coming up nearby.`;
   const recents = recentLocs().filter((r) => r.name !== loc.name);
@@ -137,15 +142,17 @@ function renderWhere() {
 $("#locRecent").addEventListener("click", (e) => {
   const b = e.target.closest("button");
   if (!b) return;
-  if (b.hasAttribute("data-home")) return setLoc(HOME_LOC);
+  if (b.hasAttribute("data-home")) return chooseLoc(HOME_LOC);
   const r = recentLocs().find((x) => x.name === b.dataset.recent);
-  if (r) setLoc({ ...r, kind: "search" });
+  if (r) chooseLoc({ ...r, kind: "search" });
 });
 
 function chooseLoc(l) {
   locResults.hidden = true;
   locResults.innerHTML = "";
   locInput.value = "";
+  $("#locMore").hidden = true;
+  $("#locToggle").setAttribute("aria-expanded", "false");
   setLoc(l);
 }
 
@@ -183,9 +190,20 @@ async function doSearch() {
 }
 $("#locGo").addEventListener("click", doSearch);
 locInput.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); doSearch(); } });
+function openSearch() {
+  $("#locMore").hidden = false;
+  $("#locToggle").setAttribute("aria-expanded", "true");
+  locInput.focus({ preventScroll: true });
+}
+$("#locToggle").addEventListener("click", () => {
+  const open = $("#locMore").hidden;
+  $("#locMore").hidden = !open;
+  $("#locToggle").setAttribute("aria-expanded", String(open));
+  if (open) locInput.focus();
+});
 $("#mapChange").addEventListener("click", () => {
   $("#whereAreWe").scrollIntoView({ behavior: calm() ? "auto" : "smooth", block: "center" });
-  setTimeout(() => locInput.focus({ preventScroll: true }), calm() ? 0 : 400);
+  setTimeout(openSearch, calm() ? 0 : 400);
 });
 
 // ── Dealing ──────────────────────────────────────────────────────
@@ -200,6 +218,8 @@ let lastPrefs = ANYTHING;
 const prefsFor = (mode) => (mode === "surprise" ? { ...ANYTHING, when: readPrefs().when } : readPrefs());
 // Doable then, or there's a real event for it then (a gig at 9pm makes "Gig Roulette" doable).
 const possibleFor = (prefs) => (idea) => !whyNot(idea, prefs.when, getLoc().ll) || hasEventFor(idea, prefs.when);
+// Would your choices find (more) exact matches if you weren't limited to now/tonight?
+const laterHelps = (prefs) => deal(IDEAS, { ...prefs, when: "plan" }, { interests: getInterests() }).exact > deal(IDEAS, prefs, { interests: getInterests(), possible: possibleFor(prefs) }).exact;
 const boostFor = (prefs) => (idea) => (prefs.when !== "plan" && hasEventFor(idea, prefs.when) ? 4 : 1);
 
 // Event-type ideas get a live "what's on" search for wherever you are.
@@ -212,6 +232,7 @@ const WHATS_ON = {
   "escape-room": "escape room", "treetop-adventure": "high ropes course", "countryside-hack": "beginner horse riding",
   "vineyard-tasting": "vineyard tour and tasting", "spa-day": "spa day", "sunset-boat": "sunset boat trip", "roller-disco": "ice skating or roller disco",
   "market-graze": "food market", "market-to-plate": "farmers market", "busker-bingo": "street performers",
+  "afternoon-tea": "afternoon tea", "brunch-new": "best brunch", "dessert-crawl": "best desserts",
 };
 function eventLine(ev) {
   return `
@@ -288,7 +309,12 @@ function cardFront({ idea, place, event, bends: bendList = [] }) {
       <li>${WHERE_EMOJI[idea.w]} ${WHERE_LABEL[idea.w]}</li>
       <li>⏱ ${SHORT_TIME[idea.time]}</li>
       <li>${idea.cost ? "💷 " + COST_LABEL[idea.cost] : "✨ Free"}</li>
-      ${(() => { const hint = event ? "" : goByHint(idea, lastPrefs.when, getLoc().ll); return hint ? `<li class="go-by">${esc(hint)}</li>` : ""; })()}
+      ${(() => {
+        if (event) return "";
+        const from = getLoc().ll;
+        const hint = (place && leaveBy(idea, place, lastPrefs.when, from, travel(place.ll, from).mins)) || goByHint(idea, lastPrefs.when, from);
+        return hint ? `<li class="go-by">${esc(hint)}</li>` : "";
+      })()}
     </ul>
     ${event ? "" : whatsOnLink(idea, lastPrefs)}
     ${whyLine(idea, bendList, lastPrefs)}
@@ -307,9 +333,10 @@ const CARD_BACK = `
   </div>`;
 
 // Give each card something real: an actual event if one suits it, else a place.
-function withPlaces(picks, prefs, { keep = false } = {}) {
-  const avoid = new Set(keep ? picks.map((c) => c.place?.id).filter(Boolean) : []);
-  const avoidEv = new Set(keep ? picks.map((c) => c.event?.id).filter(Boolean) : []);
+function withPlaces(picks, prefs, { keep = false, table = [] } = {}) {
+  const onTable = keep ? picks : table;
+  const avoid = new Set(onTable.map((c) => c.place?.id).filter(Boolean));
+  const avoidEv = new Set(onTable.map((c) => c.event?.id).filter(Boolean));
   return picks.map((card) => {
     if (keep && (card.event || card.place || !card.idea.go && !hasEventFor(card.idea, prefs.when))) return card;
     const ev = eventForIdea(card.idea, prefs.when, avoidEv);
@@ -408,7 +435,10 @@ async function run(mode) {
         ? "Every one fits what you picked."
         : exact
           ? `Only ${exact} idea${exact === 1 ? " fits" : "s fit"} everything you picked, so Theo added the closest near miss${bent > 1 ? "es" : ""} (marked).`
-          : "Nothing fits all of that exactly, so these are the closest. Each says which rule it bends.");
+          : "Nothing fits all of that exactly, so these are the closest. Each says which rule it bends.")
+      + (exact < 3 && prefs.when !== "plan" && mode !== "surprise" && laterHelps(prefs)
+        ? (prefs.when === "now" ? " More would fit later: try 🌙 Tonight or 📅 Plan ahead." : " More would fit another day: try 📅 Plan ahead.")
+        : "");
   results.hidden = false;
   renderHand();
   say(theoLine(bent ? "relaxed" : "done"), "happy");
@@ -451,9 +481,7 @@ deck.addEventListener("click", async (e) => {
   if (!next) { seen = new Set(hand.map((c) => c.idea.id)); [next] = deal(IDEAS, prefs, { ...opts, exclude: seen }).picks; }
   if (!next) return;
   seen.add(next.idea.id);
-  const others = hand.filter((_, j) => j !== i);
-  [hand[i]] = withPlaces([{ ...next, place: null, event: null }], prefs);
-  if (hand[i].place && others.some((c) => c.place?.id === hand[i].place.id)) hand[i] = { ...next, event: null, place: pickPlace(next.idea, { time: prefs.time, avoid: new Set(others.map((c) => c.place?.id)), when: prefs.when }) };
+  [hand[i]] = withPlaces([{ ...next, place: null, event: null }], prefs, { table: hand.filter((_, j) => j !== i) });
   card.classList.remove("flipped");
   $(".front", card).inert = true;
   await wait(420);
@@ -545,10 +573,12 @@ function showIdea(idea, place, { fresh }) {
       </div>`; })() : place ? `
       <div class="dlg-place">
         <p class="dlg-place-name"><span aria-hidden="true">📍</span> <b>${esc(place.n)}</b>${place.town ? `, ${esc(place.town)}` : ""}${fresh ? ` <small>${travelLabel(place.ll, getLoc().ll)}</small>` : ""}</p>
+        ${fresh && ratingBadge(place) ? `<p class="pop-stars">${ratingBadge(place)} <small>on Google</small></p>` : ""}
         <p>${esc(place.b)}</p>
+        ${fresh && hoursLine(place) ? `<p class="pop-hours"><b>${hoursLine(place)}</b></p>` : ""}
         <p class="pop-links">
           <a href="${mapsDirections(place)}" target="_blank" rel="noopener">Directions ↗</a>
-          <a href="${mapsSearch(place)}" target="_blank" rel="noopener">Hours &amp; booking ↗</a>
+          <a href="${place.g?.uri ? esc(place.g.uri) : mapsSearch(place)}" target="_blank" rel="noopener">Reviews &amp; booking ↗</a>
         </p>
       </div>` : ""}
       <h3>The plan</h3>

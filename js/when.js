@@ -148,6 +148,38 @@ const fmtTime = (h) => {
 export const clock = (d) => fmtTime(hourOf(d));
 
 // A short "go by" hint for a doable idea, e.g. "Start by 9pm" or "Before dark (sunset 6:12pm)".
+// The latest moment (as a Date) you could start an outing, or null if there's no
+// deadline (stay-home ideas, Plan ahead). Used to make sure there's time to get there.
+export function latestStart(idea, mode, ll, now = new Date()) {
+  if (mode === "plan" || idea.w === "in") return null;
+  const t = timingFor(idea);
+  const start = startFor(mode, now);
+  const h = hourOf(start);
+  let end = null;
+  const win = (t.at || []).find(([a, b]) => (h >= a && h <= b) || (h + 24 >= a && h + 24 <= b));
+  if (win) end = win[1] - (h >= win[0] && h <= win[1] ? 0 : 24);
+  if (t.sun === "day" || t.sun === "golden") {
+    const sun = sunTimes(start, ll);
+    if (sun) {
+      const set = hourOf(sun.sunset);
+      const sunEnd = t.sun === "golden" ? set - 0.3 : set + 0.25 - (DAYLIGHT_HOURS[idea.time] || 2);
+      end = end == null ? sunEnd : Math.min(end, sunEnd);
+    }
+  }
+  if (end == null) return null;
+  const d = new Date(start);
+  d.setHours(0, 0, 0, 0);
+  return new Date(d.getTime() + end * 3600e3);
+}
+
+// "Leave by 8:25pm": when you'd need to set off to reach a place in time.
+export function leaveBy(idea, place, mode, ll, travelMins, now = new Date()) {
+  const last = latestStart(idea, mode, ll, now);
+  if (!last || !place) return "";
+  const leave = new Date(last.getTime() - travelMins * 60e3);
+  return leave > now ? `🚗 Leave by ${clock(leave)}` : "";
+}
+
 export function goByHint(idea, mode, ll, now = new Date()) {
   if (mode === "plan") return needsBooking(idea) ? "📅 Book ahead" : "";
   const t = timingFor(idea);

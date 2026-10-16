@@ -2,7 +2,7 @@
 //   moods  → the idea must match at least one mood you picked
 //   where  → stay home / get outdoors / go somewhere (ideas marked "out" work for either outing)
 //   budget → Free = free, A little = up to £, Treat us = ££ only
-//   time   → A couple of hours = short only, The evening = up to an evening, All day = evening or longer
+//   time   → 1–2 hours = short only, A few hours = up to 3–4 hours, All day = longer
 // Ideas that fit everything are shuffled, leaning towards whoever's pick it is and
 // away from things you've done lately. If fewer than three fit, Theo tops up with the
 // nearest misses, bending the least important rule first, and says which rule he bent.
@@ -17,7 +17,7 @@ export const VIBES = [
   { id: "active", label: "Active", emoji: "🏃" },
 ];
 
-export const TIME_LABEL = { 1: "A couple of hours", 2: "The whole evening", 3: "A whole day" };
+export const TIME_LABEL = { 1: "1–2 hours", 2: "A few hours", 3: "All day" };
 export const COST_LABEL = { 0: "Free", 1: "£", 2: "££" };
 export const WHERE_LABEL = { in: "Stay home", outdoor: "Outdoors", venue: "Go somewhere", out: "Out & about" };
 export const WHERE_EMOJI = { in: "🏠", outdoor: "🌳", venue: "🍽️", out: "🚪" };

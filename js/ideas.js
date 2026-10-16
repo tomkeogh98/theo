@@ -430,7 +430,7 @@ export const IDEAS = [
     v: ["food", "adventure"], w: "venue", time: 2, cost: 2, i: ["eating-out", "adventure"], go: ["new"],
   },
   {
-    id: "pub-supper", e: "🔥", t: "Country Pub Supper",
+    id: "pub-supper", e: "🔥", t: "Country Pub Meal",
     b: "A village pub, a fire, a proper pie and a pint. Short drive, long chat.",
     s: ["Pick a pub, ring ahead for a table near the fire, and decide who's driving.", "Order something hearty and share a pudding.", "Do a slow lap of the village afterwards before heading home."],
     q: "What's your favourite pub memory, and who were you with?",
@@ -478,7 +478,7 @@ export const IDEAS = [
     b: "Do the top three tourist things where you live, the ones locals never do. Wear a bum bag for full commitment.",
     s: ["Look up the top-rated attractions in your own town.", "Do three of them, with a terrible guidebook voice.", "Buy a postcard and write it to each other."],
     q: "What do you love about where we live?",
-    v: ["adventure", "culture"], w: "out", time: 3, cost: 1, i: ["travel", "history", "art"], go: ["museum"],
+    v: ["adventure", "culture"], w: "out", time: 3, cost: 1, i: ["travel", "history", "art"], go: ["museum", "heritage"],
   },
   {
     id: "castle-day", e: "🏰", t: "Castle & Cake",
@@ -889,7 +889,7 @@ export const IDEAS = [
     b: "Tiny sandwiches, scones and a tiered stand of cakes. Very civilised, slightly ridiculous and always a treat.",
     s: ["Book afternoon tea somewhere lovely (hotels and posh cafés usually do it).", "Dress up a little. Pinkies optional.", "Settle the jam-or-cream-first debate once and for all."],
     q: "What's a tradition from your family you'd like us to keep?",
-    v: ["food", "cosy"], w: "venue", time: 1, cost: 2, i: ["eating-out", "cosy"], go: ["treat", "romantic"],
+    v: ["food", "cosy"], w: "venue", time: 1, cost: 2, i: ["eating-out", "cosy"], go: ["afternoon-tea"],
   },
   {
     id: "cocktails-small-plates", e: "🍸", t: "Cocktails & Small Plates",
@@ -931,7 +931,7 @@ export const IDEAS = [
     b: "A lazy brunch somewhere you've never been. Weekend date night, but with pancakes.",
     s: ["Pick somewhere new and go before the queue does.", "Order one sweet and one savoury and share.", "Plan the rest of the day over a second coffee."],
     q: "What does your perfect weekend morning look like?",
-    v: ["food", "cosy"], w: "venue", time: 1, cost: 1, i: ["eating-out", "cosy"], go: ["new"],
+    v: ["food", "cosy"], w: "venue", time: 1, cost: 1, i: ["eating-out", "cosy"], go: ["brunch"],
   },
   {
     id: "market-graze", e: "🥟", t: "Food Market Graze",

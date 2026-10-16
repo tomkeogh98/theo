@@ -2,8 +2,9 @@
 // Fetched once per place for the next fortnight, kept for an hour, then filtered
 // per "When?": starting soon (Right now), this evening (Tonight) or the next two
 // weeks (Plan ahead).
-import { getKeys } from "./keys.js?v=6";
-import { getLoc } from "./locale.js?v=6";
+import { getKeys } from "./keys.js?v=7";
+import { getLoc } from "./locale.js?v=7";
+import { travel } from "./places.js?v=7";
 
 const API = "https://app.ticketmaster.com/discovery/v2/events.json";
 const TTL = 60 * 60 * 1000;
@@ -15,7 +16,7 @@ export const onEvents = (fn) => listeners.add(fn);
 // Which ideas an event can stand in for.
 export const IDEA_KINDS = {
   "gig-roulette": ["gig"], "jazz-bar": ["jazz"], "piano-nightcap": ["jazz"], "classical-night": ["classical"],
-  "lunchtime-concert": ["classical"], "comedy-night": ["comedy"], "rush-theatre": ["theatre"], "big-theatre": ["theatre"],
+  "comedy-night": ["comedy"], "rush-theatre": ["theatre"], "big-theatre": ["theatre"],
   "fringe-theatre": ["theatre", "comedy"], "poster-cinema": ["film"], "matinee": ["film"],
 };
 
@@ -106,15 +107,26 @@ export function eventsFor(mode, now = new Date()) {
   });
 }
 
-export function hasEventFor(idea, mode, now = new Date()) {
+// Events that suit an idea and that you could actually get to (with 10 minutes to
+// spare) from wherever Theo is looking. Plan ahead skips the travel check.
+function suitable(idea, mode, now, avoid = new Set()) {
   const kinds = IDEA_KINDS[idea.id];
-  return !!kinds && eventsFor(mode, now).some((ev) => kinds.includes(ev.kind) && (ev.timeKnown || mode === "plan"));
+  if (!kinds) return [];
+  const from = getLoc().ll;
+  return eventsFor(mode, now).filter((ev) => {
+    if (!kinds.includes(ev.kind) || avoid.has(ev.id)) return false;
+    if (mode === "plan") return true;
+    if (!ev.timeKnown) return false;
+    return ev.start.getTime() >= now.getTime() + (travel(ev.ll, from).mins + 10) * 60e3;
+  });
+}
+
+export function hasEventFor(idea, mode, now = new Date()) {
+  return suitable(idea, mode, now).length > 0;
 }
 
 export function eventForIdea(idea, mode, avoid = new Set(), now = new Date()) {
-  const kinds = IDEA_KINDS[idea.id];
-  if (!kinds) return null;
-  const pool = eventsFor(mode, now).filter((ev) => kinds.includes(ev.kind) && !avoid.has(ev.id) && (ev.timeKnown || mode === "plan"));
+  const pool = suitable(idea, mode, now, avoid);
   if (!pool.length) return null;
   // Prefer sooner (for Right now) or a random pick across the window (otherwise).
   return mode === "now" ? pool[0] : pool[Math.floor(Math.random() * Math.min(pool.length, 12))];

@@ -1001,3 +1001,9 @@ kbd {
 .conn-field input { padding: 9px 12px; border: 2px solid var(--ink); border-radius: 12px; background: var(--card); font-family: ui-monospace, Menlo, monospace; font-size: .9rem; }
 .conn-status { margin: 12px 0 0; font-size: .9rem; color: var(--ink-soft); word-break: break-all; }
 .foot .link-btn { font-size: .8rem; }
+
+/* ── Compact "Where are we?" ────────────────────────────────────── */
+.where .loc-row { align-items: center; }
+.where .loc-now { margin: 0 6px 0 0; flex: 1 1 auto; }
+.loc-more { margin-top: 10px; }
+.loc-more .loc-search { flex: none; }
