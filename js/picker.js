@@ -37,7 +37,7 @@ export function bends(idea, prefs) {
   const out = [];
   if (prefs.vibes.length && !idea.v.some((v) => prefs.vibes.includes(v))) out.push("mood");
   if (!placeOk(idea, prefs.where)) out.push("where");
-  if (!budgetOk(idea, prefs.cost)) out.push("budget");
+  if (!idea.flexCost && !budgetOk(idea, prefs.cost)) out.push("budget");
   if (!timeOk(idea, prefs.time)) out.push("time");
   return out;
 }
@@ -45,7 +45,7 @@ export function bends(idea, prefs) {
 // Which rule matters least when Theo has to bend one.
 const BEND_COST = { time: 1, budget: 2, where: 3, mood: 4 };
 
-function weight(idea, prefs, recent, interests) {
+export function weight(idea, prefs, recent, interests) {
   let w = 1 + idea.v.filter((v) => prefs.vibes.includes(v)).length * 1.5;
   const tom = idea.i.filter((x) => interests.tom.includes(x)).length;
   const cat = idea.i.filter((x) => interests.cat.includes(x)).length;

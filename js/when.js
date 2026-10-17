@@ -90,6 +90,11 @@ export const TIMING = {
 };
 
 function timingFor(idea) {
+  if (idea.timing) {
+    const t = idea.timing;
+    if (t.at || t.book) return t;
+    return { ...t, at: { in: [[6, 22]], outdoor: [[6, 22]], venue: [[10, 21]], out: [[9, 18]] }[idea.w] };
+  }
   const t = TIMING[idea.id] || {};
   if (t.at || t.book) return t;
   const base = {
@@ -116,6 +121,11 @@ export function startFor(mode, now = new Date()) {
 
 // null if it works, otherwise a short reason.
 export function whyNot(idea, mode, ll, now = new Date()) {
+  if (idea.whyNot) return idea.whyNot(mode, ll, now);
+  return baseWhyNot(idea, mode, ll, now);
+}
+
+export function baseWhyNot(idea, mode, ll, now = new Date()) {
   if (mode === "plan") return null;
   const t = timingFor(idea);
   if (t.book) return "needs booking";
@@ -151,6 +161,7 @@ export const clock = (d) => fmtTime(hourOf(d));
 // The latest moment (as a Date) you could start an outing, or null if there's no
 // deadline (stay-home ideas, Plan ahead). Used to make sure there's time to get there.
 export function latestStart(idea, mode, ll, now = new Date()) {
+  if (idea.latestStart) return idea.latestStart(mode, ll, now);
   if (mode === "plan" || idea.w === "in") return null;
   const t = timingFor(idea);
   const start = startFor(mode, now);
@@ -177,7 +188,7 @@ export function leaveBy(idea, place, mode, ll, travelMins, now = new Date()) {
   const last = latestStart(idea, mode, ll, now);
   if (!last || !place) return "";
   const leave = new Date(last.getTime() - travelMins * 60e3);
-  return leave > now ? `🚗 Leave by ${clock(leave)}` : "";
+  return leave > now ? `⏰ Leave by ${clock(leave)}` : "";
 }
 
 export function goByHint(idea, mode, ll, now = new Date()) {

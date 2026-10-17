@@ -2,7 +2,7 @@
 // via the browser's location or a place search. Away from home, real places come
 // live from OpenStreetMap (Nominatim to find the place, Overpass for what's there),
 // cached in this browser so a holiday town only loads slowly once.
-import { PLACES, HOME, km } from "./places.js?v=7";
+import { PLACES, HOME, km } from "./places.js?v=8";
 
 const LOC_KEY = "theo.loc.v1";
 const RECENT_KEY = "theo.locRecent.v1";
@@ -123,7 +123,7 @@ export function locate() {
 
 // ── What's around: Overpass → Theo's place format ────────────────
 
-function bbox([lat, lon], d) {
+export function bbox([lat, lon], d) {
   const dLon = d / Math.cos((lat * Math.PI) / 180);
   return [lat - d, lon - dLon, lat + d, lon + dLon].map((n) => n.toFixed(4)).join(",");
 }
@@ -146,7 +146,7 @@ out center tags 3000;`;
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-async function overpass(q) {
+export async function overpass(q) {
   const ctrls = OVERPASS.map(() => new AbortController());
   const attempt = async (url, i) => {
     if (i) await sleep(5000); // hedge: only bother the backup if the first is slow
@@ -242,7 +242,7 @@ function parse(json, l) {
   for (const e of json.elements || []) {
     const t = e.tags || {};
     const ll = e.center ? [e.center.lat, e.center.lon] : [e.lat, e.lon];
-    if (!t.name || ll[0] == null) continue;
+    if (!t.name || ll[0] == null || /car boot/i.test(t.name)) continue;
     const kind = classify(t);
     if (!kind) continue;
     const dupe = `${t.name}|${kind.cat}`;
@@ -261,6 +261,8 @@ function parse(json, l) {
       hours: t.opening_hours || null,
       url,
       q,
+      chain: !!(t.brand || t["brand:wikidata"]),
+      cuisine: t.cuisine || null,
       osm: true,
       d: km(l.ll, ll),
     });

@@ -1007,3 +1007,62 @@ kbd {
 .where .loc-now { margin: 0 6px 0 0; flex: 1 1 auto; }
 .loc-more { margin-top: 10px; }
 .loc-more .loc-search { flex: none; }
+
+/* ── Contextual dates: walks, pairings, hooks ───────────────────── */
+.pc-walk {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1.5px dashed var(--grass);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--grass) 9%, var(--card));
+}
+.walk-stats { margin: 0 0 8px; font-weight: 700; font-size: .92rem; }
+.walk-stops { margin: 0 0 10px; padding: 0; list-style: none; display: grid; gap: 3px; font-size: .88rem; }
+.walk-stops li { padding-left: 2px; }
+.pc-route {
+  padding: 5px 11px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: .82rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+.pc-route:hover { background: var(--lilac-pale); }
+.pc-pair {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  width: 100%;
+  margin: -6px 0 14px;
+  padding: 8px 12px;
+  border: 1.5px dashed var(--lilac-deep);
+  border-radius: 12px;
+  background: var(--lilac-pale);
+  text-align: left;
+  line-height: 1.25;
+  cursor: pointer;
+}
+.pc-pair b { font-family: var(--display); font-variation-settings: "SOFT" 100, "WONK" 1; }
+.pc-pair small { display: block; font-size: .8rem; color: var(--ink-soft); margin-top: 2px; }
+.pc-pair .pair-role { display: inline; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; color: var(--lilac-deep); }
+.pc-walk + .meta, .pc-pair + .meta { margin-top: 0; }
+.pc-hooks { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.pc-hooks span { padding: 3px 9px; border-radius: 999px; background: var(--sea-pale); font-size: .8rem; font-weight: 600; }
+.pin-pair { width: 34px; height: 34px; background: #fffcf6; font-size: 16px; }
+.walk-links { margin-top: 12px; }
+.local-ready {
+  display: block;
+  margin: -8px 0 18px;
+  padding: 9px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--grass) 18%, var(--card));
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 3px 3px 0 var(--shadow);
+}
+.local-ready[hidden] { display: none; }
+
+.loc-about { margin: 8px 0 0; font-family: var(--hand); font-size: 1.15rem; line-height: 1.2; color: var(--ink-soft); }
+.loc-about[hidden] { display: none; }

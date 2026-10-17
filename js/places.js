@@ -174,6 +174,13 @@ export const PLACES = [
     b: "Punt hire under Magdalen Bridge (seasonal)." },
 ];
 
+// Somewhere to eat on a date: not a coffee or burger chain if there's anywhere else
+// (other chains are fine, just not first choice), and not somewhere you can't go in.
+export const BIG_CHAIN = /^(costa|starbucks|caff[eè] nero|cafe nero|pret\b|greggs|mcdonald|kfc|burger king|subway|domino|pizza hut|papa john|five guys|leon\b|itsu|wasabi|tim hortons|krispy|harvester|toby carvery|beefeater|brewers fayre|hungry horse|frankie|chiquito|tgi|wetherspoon|j ?d wetherspoon|bella italia|prezzo|zizzi|ask italian|pizza ?express|nando|las iguanas|caffe concerto|black sheep coffee|joe (and|&) the juice|esquires|coffee ?#?1|muffin break|cafe rouge|wildwood|miller (and|&) carter|sizzling pub|ember inn|vintage inn|chef (and|&) brewer|stonehouse)/i;
+export const NOT_PUBLIC = /\bmembers\b|\bstaff\b|\bprivate\b|canteen|cafeteria|refectory|hospital|university|college|school|\boffice\b|\bwards?\b/i;
+const NOT_A_DATE = /sports (bar|cafe|pub)|hot chicken|fried chicken|chicken shop|kebab|\bwings\b|shisha|\bcasino\b|betting|carvery|\bservices\b/i;
+export const chainPenalty = (p) => (BIG_CHAIN.test(p.n || "") ? 4 : p.chain ? 1.5 : 0) + (NOT_A_DATE.test(p.n || "") ? 2.5 : 0);
+
 export function km([a, b], [c, d]) {
   const r = Math.PI / 180;
   const x = Math.sin(((c - a) * r) / 2) ** 2 + Math.cos(a * r) * Math.cos(c * r) * Math.sin(((d - b) * r) / 2) ** 2;
@@ -183,17 +190,23 @@ export function km([a, b], [c, d]) {
 // A rough travel time from wherever Theo is looking: walking if it's close, else
 // driving (road ≈ 1.3× straight line at ~45km/h, plus parking, plus central Oxford
 // traffic). Rounded to 5 minutes.
+// Nobody drives across London: walk if it's close, otherwise Tube or bus (about 12
+// minutes to get to the station and wait, then ~23 km/h).
+export const inLondon = ([lat, lon]) => lat > 51.28 && lat < 51.7 && lon > -0.52 && lon < 0.34;
 export function travel(ll, from = HOME.ll) {
   const d = km(from, ll);
   const round5 = (m) => Math.max(5, Math.round(m / 5) * 5);
   if (d < 1.6) return { mode: "walk", mins: round5((d * 1.3 * 60) / 4.8) };
+  if (inLondon(from) && inLondon(ll)) return { mode: "transit", mins: round5(12 + d * 1.3 * 2.6) };
   const inOxford = ll[0] > 51.735 && ll[0] < 51.785 && ll[1] > -1.29 && ll[1] < -1.2;
   return { mode: "drive", mins: round5((d * 1.3 * 60) / 45 + 4 + (inOxford ? 8 : 0)) };
 }
 
+const MODE_WORD = { walk: "walk", drive: "drive", transit: "by Tube/bus" };
+export const MODE_EMOJI = { walk: "🚶", drive: "🚗", transit: "🚇" };
 export const travelLabel = (ll, from) => {
   const t = travel(ll, from);
-  return `~${t.mins} min ${t.mode}`;
+  return `~${t.mins} min ${MODE_WORD[t.mode] || t.mode}`;
 };
 
 // Live places search by name centred on their exact spot (town names aren't always known).
