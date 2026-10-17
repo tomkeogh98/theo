@@ -3,11 +3,11 @@
 // real events (Ticketmaster) and star ratings (Google) when those are connected.
 // Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
 // own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections } from "./places.js?v=7";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=7";
-import { openAt, hoursLine, startFor, latestStart } from "./when.js?v=7";
-import { eventsFor, onEvents, whenLabel } from "./events.js?v=7";
-import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=7";
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections, MODE_EMOJI } from "./places.js?v=8";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=8";
+import { openAt, hoursLine, startFor, latestStart } from "./when.js?v=8";
+import { eventsFor, onEvents, whenLabel } from "./events.js?v=8";
+import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=8";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
@@ -301,33 +301,81 @@ function renderList() {
       <li><button type="button" data-goto="${p.id}">
         <span class="li-emoji" aria-hidden="true">${CATS[p.cat].emoji}</span>
         <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.event ? p.b : p.osm ? p.b : p.town)}${extra}</small></span>
-        <span class="li-mins">${stars ? `<b class="li-stars">${stars}</b>` : ""}${t.mins} min ${t.mode === "walk" ? "🚶" : "🚗"}</span>
+        <span class="li-mins">${stars ? `<b class="li-stars">${stars}</b>` : ""}${t.mins} min ${MODE_EMOJI[t.mode] || "🚗"}</span>
       </button></li>`;
       }).join("")
     : `<li class="li-empty">${getStatus() === "loading" ? "Sniffing…" : "Nothing here yet."}</li>`;
 }
 
 // Highlight the places on Theo's current postcards as numbered pins.
+// Highlight Theo's current postcards: numbered pins, and for walks the route itself
+// (start, landmarks, destination) drawn on the map.
+const routes = new Map();
 export function showPicks(hand) {
   if (!map) return;
   picksLayer.clearLayers();
   pickMarkers.clear();
+  routes.clear();
   const pts = [];
-  hand.forEach(({ place }, i) => {
+  const pin = (ll, label, title, place, cls = "pin-pick") => {
+    const m = L.marker(ll, {
+      icon: L.divIcon({ className: "", html: `<span class="pin ${cls}">${label}</span>`, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -18] }),
+      zIndexOffset: 1000, title, alt: title,
+    });
+    if (place) {
+      m.bindPopup(() => popupHtml(place), { maxWidth: popW, autoPanPadding: [16, 16] });
+      m.getPopup()._theoPlace = place;
+    } else {
+      m.bindTooltip(esc(title), { direction: "top", offset: [0, -16] });
+    }
+    m.addTo(picksLayer);
+    return m;
+  };
+  hand.forEach((card, i) => {
+    const label = hand.length > 1 ? i + 1 : "★";
+    const adv = card.idea?.adv;
+    if (adv) {
+      // Real trail routes get drawn; walks without one just get their destination pinned.
+      if (adv.path.length > 2) {
+        const line = L.polyline(adv.path, { color: "#7a62b3", weight: 5, opacity: 0.85, dashArray: "8 7", lineCap: "round" }).addTo(picksLayer);
+        line.bindTooltip(esc(card.idea.t), { sticky: true });
+        routes.set(card.idea.id, line);
+        pts.push(...adv.path);
+        adv.landmarks.forEach((l) => {
+          L.circleMarker(l.ll, { radius: 7, color: "#27222f", weight: 2, fillColor: "#fffcf6", fillOpacity: 1 })
+            .bindTooltip(esc(l.name), { direction: "top" }).addTo(picksLayer);
+        });
+      } else {
+        pts.push(adv.dest.ll);
+      }
+      pin(adv.dest.ll, label, `${card.idea.t}: ${adv.dest.name}`, null);
+      if (card.pair) {
+        if (!byId.has(card.pair.id)) byId.set(card.pair.id, card.pair);
+        pickMarkers.set(card.pair.id, pin(card.pair.ll, "☕", card.pair.n, card.pair, "pin-pair"));
+      }
+      return;
+    }
+    const place = card.place;
     if (!place) return;
     if (!byId.has(place.id)) byId.set(place.id, place);
     pts.push(place.ll);
-    const m = L.marker(place.ll, {
-      icon: L.divIcon({ className: "", html: `<span class="pin pin-pick">${hand.length > 1 ? i + 1 : "★"}</span>`, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -18] }),
-      zIndexOffset: 1000,
-      title: place.n,
-      alt: `Theo's pick: ${place.n}`,
-    }).bindPopup(() => popupHtml(place), { maxWidth: popW, autoPanPadding: [16, 16] });
-    m.getPopup()._theoPlace = place;
-    m.addTo(picksLayer);
-    pickMarkers.set(place.id, m);
+    pickMarkers.set(place.id, pin(place.ll, label, `Theo's pick: ${place.n}`, place));
+    if (card.pair && card.pair.id !== place.id) {
+      if (!byId.has(card.pair.id)) byId.set(card.pair.id, card.pair);
+      pts.push(card.pair.ll);
+      pickMarkers.set(card.pair.id, pin(card.pair.ll, "🍽️", card.pair.n, card.pair, "pin-pair"));
+    }
   });
   if (pts.length) map.fitBounds(L.latLngBounds([getLoc().ll, ...pts]), { padding: [56, 56], maxZoom: 14 });
+}
+
+// Zoom the map to a walk's route.
+export function focusRoute(ideaId) {
+  const line = routes.get(ideaId);
+  if (!map || !line) return;
+  const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.getElementById("mapSection").scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
+  setTimeout(() => map.fitBounds(line.getBounds(), { padding: [40, 40] }), calm ? 0 : 400);
 }
 
 export function focusPlace(id, { scroll = true } = {}) {

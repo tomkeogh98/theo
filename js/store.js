@@ -24,12 +24,15 @@ function write(key, value) {
 export const diary = {
   all: () => read(KEY, []),
   save: (entries) => write(KEY, entries),
-  add(idea, place) {
+  add(idea, place, stepsNow) {
     const entries = diary.all();
+    const ideaSnap = idea.local || idea.seasonal
+      ? { id: idea.id, e: idea.e, t: idea.t, b: idea.b, s: stepsNow || idea.s || [], q: idea.q, v: idea.v, w: idea.w, time: idea.time, cost: idea.cost, i: idea.i || [] }
+      : null;
     const ev = place?.event;
     const snap = place ? { id: place.id, n: place.n, town: place.town, ll: place.ll, b: place.b, osm: !!place.osm, url: place.url || null,
       ev: ev ? { name: ev.name, venue: ev.venue, start: ev.start, timeKnown: ev.timeKnown, price: ev.price, url: ev.url, ll: ev.ll } : null } : null;
-    const entry = { key: `${Date.now()}`, id: idea.id, placeId: place?.id ?? null, place: snap, plannedAt: new Date().toISOString(), doneAt: null };
+    const entry = { key: `${Date.now()}`, id: idea.id, idea: ideaSnap, placeId: place?.id ?? null, place: snap, plannedAt: new Date().toISOString(), doneAt: null };
     entries.unshift(entry);
     diary.save(entries);
     return entry;

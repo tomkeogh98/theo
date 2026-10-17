@@ -3,9 +3,9 @@
 // wherever Theo is looking (attached to matching map places, or added if new),
 // and a one-off lookup when you open a pin or a postcard names a place.
 // Google's terms allow only short-term caching, so nothing is kept beyond 24 hours.
-import { getKeys } from "./keys.js?v=7";
-import { getLoc, getPlaces, getStatus, onChange, refresh } from "./locale.js?v=7";
-import { km } from "./places.js?v=7";
+import { getKeys } from "./keys.js?v=8";
+import { getLoc, getPlaces, getStatus, onChange, refresh } from "./locale.js?v=8";
+import { km } from "./places.js?v=8";
 
 const API = "https://places.googleapis.com/v1";
 const TTL = 24 * 3600e3;
