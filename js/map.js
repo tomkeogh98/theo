@@ -1,19 +1,18 @@
-// Theo's patch: a Leaflet map of real places around wherever Theo is looking
-// (home's hand-picked list, or live OpenStreetMap places anywhere else), plus
-// real events (Ticketmaster) and star ratings (Google) when those are connected.
-// Leaflet is a classic script in index.html (window.L); tiles are OpenStreetMap's
-// own, and dark mode recolours them with a CSS filter.
-import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections, MODE_EMOJI } from "./places.js?v=8";
-import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=8";
-import { openAt, hoursLine, startFor, latestStart } from "./when.js?v=8";
-import { eventsFor, onEvents, whenLabel } from "./events.js?v=8";
-import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=8";
+// Theo's patch: a map of real places around wherever Theo is looking (home's
+// hand-picked list, or live places anywhere else), plus real events (Ticketmaster)
+// and star ratings (Google) when those are connected. The map itself is Google Maps
+// when a Google key is connected, otherwise OpenStreetMap (see mapview.js).
+import { CATS, km, travel, travelLabel, mapsSearch, mapsDirections, MODE_EMOJI } from "./places.js?v=9";
+import { getLoc, getPlaces, getStatus, onChange } from "./locale.js?v=9";
+import { openAt, hoursLine, startFor, latestStart } from "./when.js?v=9";
+import { eventsFor, onEvents, whenLabel } from "./events.js?v=9";
+import { ratingBadge, ratingScore, enrich } from "./ratings.js?v=9";
+import { createView, leafletOnly } from "./mapview.js?v=9";
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
-const TILES = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
 const ALL = Object.keys(CATS);
 
-let map, picksLayer, baseMarker, listEl, chipsEl, statusEl;
+let view, mapEl, picksLayer, baseMarker, listEl, chipsEl, statusEl;
 let popW = 290;
 let byId = new Map();
 const markers = new Map();
@@ -24,6 +23,7 @@ let sortBy = "near";
 let eventMode = "now";
 let lastLocKey = "";
 let eventPlaces = [];
+let lastHand = [];
 
 export const placeById = (id) => byId.get(id);
 
@@ -93,9 +93,10 @@ function popupHtml(p) {
   const near = nearby(p);
   const stars = ratingBadge(p);
   const hours = hoursLine(p);
+  const cat = CATS[p.cat] || CATS.food;
   return `
     <div class="pop">
-      <p class="pop-cat">${CATS[p.cat].emoji} ${CATS[p.cat].label}${p.isNew ? ` <span class="new">New</span>` : ""}</p>
+      <p class="pop-cat">${cat.emoji} ${cat.label}${p.isNew ? ` <span class="new">New</span>` : ""}</p>
       <h3>${esc(p.n)}</h3>
       ${stars ? `<p class="pop-stars">${stars} <small>on Google</small></p>` : p.g === undefined && p.loading ? `<p class="pop-stars muted">⭐ Checking reviews…</p>` : ""}
       <p class="pop-where">${p.town ? `${esc(p.town)} · ` : ""}${travelLabel(p.ll, getLoc().ll)}</p>
@@ -106,61 +107,65 @@ function popupHtml(p) {
         <a href="${p.g?.uri ? esc(p.g.uri) : mapsSearch(p)}" target="_blank" rel="noopener">${stars ? "Read reviews" : "Reviews &amp; hours"} ↗</a>
         ${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
       </p>
-      ${p.osm && !stars ? `<p class="pop-osm">Found on OpenStreetMap, not vetted by Theo.</p>` : ""}
+      ${p.osm && !p.google && !stars ? `<p class="pop-osm">Found on OpenStreetMap, not vetted by Theo.</p>` : ""}
       ${near.length ? `<p class="pop-near">Also around here</p><div class="pop-near-list">${near
-        .map(({ q, d }) => `<button type="button" data-goto="${q.id}">${CATS[q.cat].emoji} ${esc(q.n)} <small>${ratingBadge(q, { short: true }) || metres(d)}</small></button>`)
+        .map(({ q, d }) => `<button type="button" data-goto="${q.id}">${(CATS[q.cat] || CATS.food).emoji} ${esc(q.n)} <small>${ratingBadge(q, { short: true }) || metres(d)}</small></button>`)
         .join("")}</div>` : ""}
     </div>`;
 }
 
-const pinIcon = (p) => L.divIcon({
-  className: "",
-  html: `<span class="pin pin-${p.cat}${p.isNew ? " is-new" : ""}">${CATS[p.cat].emoji}</span>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -14],
-});
+const pinHtml = (p) => `<span class="pin pin-${p.cat}${p.isNew ? " is-new" : ""}">${(CATS[p.cat] || CATS.food).emoji}</span>`;
 
-function bindGoto(popup) {
-  popup.getElement()?.querySelectorAll("[data-goto]").forEach((b) =>
+function bindGoto(el) {
+  el?.querySelectorAll("[data-goto]").forEach((b) =>
     b.addEventListener("click", () => focusPlace(b.dataset.goto, { scroll: false })));
 }
 
-export function initMap(el, list, chips, status) {
+// Popups: wire up "Also around here", and fetch Google ratings the first time.
+function onPopup(popup) {
+  bindGoto(popup.el());
+  const p = popup.place;
+  if (p && !p.event && p.g === undefined) {
+    p.loading = true;
+    popup.setContent(popupHtml(p));
+    bindGoto(popup.el());
+    enrich(p).then(() => {
+      p.loading = false;
+      if (popup.isOpen()) { popup.setContent(popupHtml(p)); bindGoto(popup.el()); }
+      renderList();
+    });
+  }
+}
+
+function setUpLayers() {
+  for (const cat of ALL) groups[cat] = view.layer();
+  picksLayer = view.layer();
+  view.onPopup(onPopup);
+  lastLocKey = "";
+}
+
+export async function initMap(el, list, chips, status) {
+  mapEl = el;
   listEl = list;
   chipsEl = chips;
   statusEl = status;
-  if (!window.L) {
+  popW = Math.max(200, Math.min(290, el.clientWidth - 70));
+  view = await createView(el, getLoc().ll, 11, popW, {
+    // Google turned the key down (bad key or out of quota): carry on with OpenStreetMap.
+    onFallback: () => {
+      view = leafletOnly(mapEl, getLoc().ll, 11, popW);
+      if (!view) return;
+      setUpLayers();
+      rebuild();
+      drawEvents();
+      showPicks(lastHand);
+    },
+  });
+  if (!view) {
     el.innerHTML = `<p class="map-fallback">The map couldn't load (are you offline?). Theo's postcards still name each place.</p>`;
     return;
   }
-  popW = Math.max(200, Math.min(290, el.clientWidth - 70));
-  map = L.map(el, { scrollWheelZoom: false }).setView(getLoc().ll, 11);
-  L.tileLayer(TILES, {
-    maxZoom: 19,
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
-  map.on("focus", () => map.scrollWheelZoom.enable());
-  map.on("blur", () => map.scrollWheelZoom.disable());
-
-  for (const cat of ALL) groups[cat] = L.layerGroup().addTo(map);
-  picksLayer = L.layerGroup().addTo(map);
-
-  // Popups: wire up "Also around here", and fetch Google ratings the first time.
-  map.on("popupopen", (e) => {
-    bindGoto(e.popup);
-    const p = e.popup._theoPlace;
-    if (p && !p.event && p.g === undefined) {
-      p.loading = true;
-      e.popup.setContent(popupHtml(p));
-      bindGoto(e.popup);
-      enrich(p).then(() => {
-        p.loading = false;
-        if (e.popup.isOpen()) { e.popup.setContent(popupHtml(p)); bindGoto(e.popup); }
-        renderList();
-      });
-    }
-  });
+  setUpLayers();
 
   chipsEl.addEventListener("click", onChip);
   listEl.addEventListener("click", (e) => {
@@ -178,13 +183,14 @@ export function initMap(el, list, chips, status) {
   onChange(rebuild);
   onEvents(() => drawEvents());
   rebuild();
+  drawEvents();
+  if (lastHand.length) showPicks(lastHand);
 }
 
 function addMarker(p) {
-  const m = L.marker(p.ll, { icon: pinIcon(p), title: p.n, alt: p.n, riseOnHover: true });
-  m.bindPopup(() => popupHtml(p), { maxWidth: popW, autoPanPadding: [16, 16] });
-  m.getPopup()._theoPlace = p;
-  m.addTo(groups[p.cat]);
+  if (!groups[p.cat]) return;
+  const m = view.pin(p.ll, { html: pinHtml(p), title: p.n, popup: () => popupHtml(p), place: p, size: 32 });
+  groups[p.cat].add(m);
   markers.set(p.id, m);
 }
 
@@ -209,10 +215,8 @@ function onChip(e) {
 }
 
 function applyFilter() {
-  for (const cat of ALL) {
-    if (active.has(cat)) groups[cat].addTo(map);
-    else map.removeLayer(groups[cat]);
-  }
+  if (!view) return;
+  for (const cat of ALL) groups[cat].setVisible(active.has(cat));
   renderChips();
   renderList();
 }
@@ -227,7 +231,7 @@ function renderChips() {
 }
 
 function rebuild() {
-  if (!map) return;
+  if (!view) return;
   const loc = getLoc();
   const places = getPlaces();
   const locKey = `${loc.ll[0]},${loc.ll[1]}`;
@@ -235,32 +239,29 @@ function rebuild() {
   lastLocKey = locKey;
   byId = new Map([...places, ...eventPlaces].map((p) => [p.id, p]));
   markers.clear();
-  for (const cat of ALL) groups[cat].clearLayers();
+  for (const cat of ALL) groups[cat].clear();
   baseMarker?.remove();
-  baseMarker = L.marker(loc.ll, {
-    icon: L.divIcon({ className: "", html: `<span class="pin pin-home">${loc.kind === "home" ? "🏠" : "📍"}</span>`, iconSize: [40, 40], iconAnchor: [20, 20] }),
-    zIndexOffset: 500,
-    keyboard: false,
-    interactive: false,
-  }).addTo(map);
+  baseMarker = view.pin(loc.ll, { html: `<span class="pin pin-home">${loc.kind === "home" ? "🏠" : "📍"}</span>`, title: "", z: 5, size: 40 });
+  baseMarker.show();
   places.forEach(addMarker);
   eventPlaces.forEach(addMarker);
-  if (!sameSpot) { active = new Set(ALL); picksLayer.clearLayers(); }
+  if (!sameSpot) { active = new Set(ALL); picksLayer.clear(); }
   applyFilter();
 
+  // Google's places can fill the map even when OpenStreetMap's database is down.
   const status = getStatus();
-  statusEl.hidden = status === "ready" && places.length > 0;
+  statusEl.hidden = places.length > 0 && status !== "loading";
   statusEl.textContent = status === "loading"
     ? `Theo's sniffing around ${loc.name}…`
-    : status === "error"
+    : status === "error" && !places.length
       ? `Theo couldn't reach the map database just now. Ideas still work; try again in a minute.`
       : `Theo couldn't find much around ${loc.name}. Try a bigger town nearby?`;
 
   // New spot: frame the nearest 40 places plus where you are. Same spot: leave the view alone.
   if (!sameSpot) {
     const near = places.map((p) => ({ p, d: km(loc.ll, p.ll) })).sort((a, b) => a.d - b.d).slice(0, 40).map((x) => x.p.ll);
-    if (near.length) map.fitBounds(L.latLngBounds([loc.ll, ...near]), { padding: [24, 24], maxZoom: 14 });
-    else map.setView(loc.ll, 12);
+    if (near.length) view.fit([loc.ll, ...near], { padding: 24, maxZoom: 14 });
+    else view.setView(loc.ll, 12, false);
   }
 }
 
@@ -270,15 +271,15 @@ export function setEventMode(mode) {
   drawEvents();
 }
 function drawEvents() {
-  if (!map) return;
+  if (!view) return;
   // One pin per venue: the soonest event there.
   const byVenue = new Map();
   for (const ev of eventsFor(eventMode)) if (!byVenue.has(ev.venue)) byVenue.set(ev.venue, ev);
   eventPlaces = [...byVenue.values()].map(eventPlace);
-  groups.events.clearLayers();
+  groups.events.clear();
   for (const [id] of [...markers]) if (id.startsWith("tm-")) markers.delete(id);
   eventPlaces.forEach((p) => { byId.set(p.id, p); addMarker(p); });
-  if (!active.has("events")) map.removeLayer(groups.events);
+  groups.events.setVisible(active.has("events"));
   renderChips();
   renderList();
 }
@@ -299,7 +300,7 @@ function renderList() {
         const stars = ratingBadge(p, { short: true });
         return `
       <li><button type="button" data-goto="${p.id}">
-        <span class="li-emoji" aria-hidden="true">${CATS[p.cat].emoji}</span>
+        <span class="li-emoji" aria-hidden="true">${(CATS[p.cat] || CATS.food).emoji}</span>
         <span class="li-name">${esc(p.n)}${p.isNew ? ` <span class="new">New</span>` : ""}<small>${esc(p.event ? p.b : p.osm ? p.b : p.town)}${extra}</small></span>
         <span class="li-mins">${stars ? `<b class="li-stars">${stars}</b>` : ""}${t.mins} min ${MODE_EMOJI[t.mode] || "🚗"}</span>
       </button></li>`;
@@ -307,44 +308,30 @@ function renderList() {
     : `<li class="li-empty">${getStatus() === "loading" ? "Sniffing…" : "Nothing here yet."}</li>`;
 }
 
-// Highlight the places on Theo's current postcards as numbered pins.
 // Highlight Theo's current postcards: numbered pins, and for walks the route itself
 // (start, landmarks, destination) drawn on the map.
 const routes = new Map();
 export function showPicks(hand) {
-  if (!map) return;
-  picksLayer.clearLayers();
+  lastHand = hand;
+  if (!view) return;
+  picksLayer.clear();
   pickMarkers.clear();
   routes.clear();
   const pts = [];
-  const pin = (ll, label, title, place, cls = "pin-pick") => {
-    const m = L.marker(ll, {
-      icon: L.divIcon({ className: "", html: `<span class="pin ${cls}">${label}</span>`, iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -18] }),
-      zIndexOffset: 1000, title, alt: title,
-    });
-    if (place) {
-      m.bindPopup(() => popupHtml(place), { maxWidth: popW, autoPanPadding: [16, 16] });
-      m.getPopup()._theoPlace = place;
-    } else {
-      m.bindTooltip(esc(title), { direction: "top", offset: [0, -16] });
-    }
-    m.addTo(picksLayer);
-    return m;
-  };
+  const pin = (ll, label, title, place, cls = "pin-pick") =>
+    picksLayer.add(view.pin(ll, {
+      html: `<span class="pin ${cls}">${label}</span>`, title: esc(title), z: 10, size: cls === "pin-pair" ? 34 : 40,
+      popup: place ? () => popupHtml(place) : null, place,
+    }));
   hand.forEach((card, i) => {
     const label = hand.length > 1 ? i + 1 : "★";
     const adv = card.idea?.adv;
     if (adv) {
       // Real trail routes get drawn; walks without one just get their destination pinned.
       if (adv.path.length > 2) {
-        const line = L.polyline(adv.path, { color: "#7a62b3", weight: 5, opacity: 0.85, dashArray: "8 7", lineCap: "round" }).addTo(picksLayer);
-        line.bindTooltip(esc(card.idea.t), { sticky: true });
-        routes.set(card.idea.id, line);
+        routes.set(card.idea.id, picksLayer.add(view.line(adv.path, { title: esc(card.idea.t) })));
         pts.push(...adv.path);
-        adv.landmarks.forEach((l) => {
-          L.circleMarker(l.ll, { radius: 7, color: "#27222f", weight: 2, fillColor: "#fffcf6", fillOpacity: 1 })
-            .bindTooltip(esc(l.name), { direction: "top" }).addTo(picksLayer);
-        });
+        adv.landmarks.forEach((l) => picksLayer.add(view.dot(l.ll, { title: esc(l.name) })));
       } else {
         pts.push(adv.dest.ll);
       }
@@ -366,24 +353,24 @@ export function showPicks(hand) {
       pickMarkers.set(card.pair.id, pin(card.pair.ll, "🍽️", card.pair.n, card.pair, "pin-pair"));
     }
   });
-  if (pts.length) map.fitBounds(L.latLngBounds([getLoc().ll, ...pts]), { padding: [56, 56], maxZoom: 14 });
+  if (pts.length) view.fit([getLoc().ll, ...pts], { padding: 56, maxZoom: 14 });
 }
 
 // Zoom the map to a walk's route.
 export function focusRoute(ideaId) {
   const line = routes.get(ideaId);
-  if (!map || !line) return;
+  if (!view || !line) return;
   const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
   document.getElementById("mapSection").scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
-  setTimeout(() => map.fitBounds(line.getBounds(), { padding: [40, 40] }), calm ? 0 : 400);
+  setTimeout(() => view.fit(line.bounds(), { padding: 40, maxZoom: 17 }), calm ? 0 : 400);
 }
 
 export function focusPlace(id, { scroll = true } = {}) {
   const p = byId.get(id);
-  if (!map || !p) return;
+  if (!view || !p) return;
   const calm = matchMedia("(prefers-reduced-motion: reduce)").matches;
   if (scroll) document.getElementById("mapSection").scrollIntoView({ behavior: calm ? "auto" : "smooth", block: "start" });
-  if (!active.has(p.cat)) { active.add(p.cat); applyFilter(); }
-  map.setView(p.ll, Math.max(map.getZoom(), 15), { animate: !calm });
+  if (groups[p.cat] && !active.has(p.cat)) { active.add(p.cat); applyFilter(); }
+  view.setView(p.ll, Math.max(view.getZoom(), 15), !calm);
   setTimeout(() => (markers.get(id) || pickMarkers.get(id))?.openPopup(), scroll && !calm ? 500 : 60);
 }

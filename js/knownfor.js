@@ -5,8 +5,8 @@
 // eat or drink. A city guide lists everything down to the plaques, so each listing is
 // ranked by how well known it is: how many Wikipedias have an article on it (via
 // Wikidata). Cached for a week per place.
-import { getLoc, onChange } from "./locale.js?v=8";
-import { km } from "./places.js?v=8";
+import { getLoc, onChange } from "./locale.js?v=9";
+import { km } from "./places.js?v=9";
 
 const API = "https://en.wikivoyage.org/w/api.php";
 const WIKIPEDIA = "https://en.wikipedia.org/w/api.php";

@@ -2,9 +2,9 @@
 // Fetched once per place for the next fortnight, kept for an hour, then filtered
 // per "When?": starting soon (Right now), this evening (Tonight) or the next two
 // weeks (Plan ahead).
-import { getKeys } from "./keys.js?v=8";
-import { getLoc } from "./locale.js?v=8";
-import { travel } from "./places.js?v=8";
+import { getKeys } from "./keys.js?v=9";
+import { getLoc } from "./locale.js?v=9";
+import { travel } from "./places.js?v=9";
 
 const API = "https://app.ticketmaster.com/discovery/v2/events.json";
 const TTL = 60 * 60 * 1000;
