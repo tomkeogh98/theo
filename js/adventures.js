@@ -14,10 +14,10 @@
 // Theo routes along the actual footpaths in the browser, adds the climb (Open-Meteo
 // elevation) and a line about the landmarks (Wikipedia), then checks the timings
 // against "When?", sunset and the weather each time you ask.
-import { getLoc, onChange, overpass, bbox } from "./locale.js?v=8";
-import { km, travel, inLondon, NOT_PUBLIC, chainPenalty } from "./places.js?v=8";
-import { sunTimes, openAt, clock, startFor } from "./when.js?v=8";
-import { weatherWindow, loadWeather } from "./weather.js?v=8";
+import { getLoc, onChange, overpass, bbox } from "./locale.js?v=9";
+import { km, travel, inLondon, NOT_PUBLIC, chainPenalty } from "./places.js?v=9";
+import { sunTimes, openAt, clock, startFor } from "./when.js?v=9";
+import { weatherWindow, loadWeather } from "./weather.js?v=9";
 
 const AREA = 0.11; // ~12 km around you
 const STORE = "theo.adv.v2:";

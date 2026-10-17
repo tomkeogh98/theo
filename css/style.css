@@ -622,6 +622,19 @@ h1 { font-weight: 900; font-size: clamp(2rem, 5.6vw, 4.4rem); }
 .leaflet-marker-icon:hover .pin-home, .leaflet-marker-icon:hover .pin-pick { transform: scale(1.12); }
 @keyframes pickPulse { 50% { box-shadow: 0 0 0 10px rgba(122, 98, 179, 0), 3px 3px 0 #27222f; } }
 
+/* Google Maps (when a Google key is connected): the same pins and postcard popups */
+.gpin { position: absolute; transform: translate(-50%, -50%); }
+.gpin.is-clickable { cursor: pointer; }
+.gpin:hover .pin, .gpin:focus-visible .pin { transform: scale(1.18); }
+.gpin:focus { outline: none; }
+.gpin:focus-visible .pin { outline: 3px solid var(--lilac-deep); outline-offset: 2px; }
+.map-dot { display: block; width: 14px; height: 14px; border: 2px solid #27222f; border-radius: 50%; background: #fffcf6; box-shadow: 1px 1px 0 rgba(39, 34, 47, .5); }
+.map.is-google .gm-style { font-family: var(--body); }
+.map.is-google .gm-style-iw-c { border: 2px solid #27222f; border-radius: 14px !important; background: var(--card) !important; color: var(--ink); box-shadow: 4px 4px 0 var(--shadow) !important; padding: 12px 14px !important; }
+.map.is-google .gm-style-iw-d { overflow: auto !important; line-height: 1.4; }
+.map.is-google .gm-style-iw-tc::after { background: var(--card); }
+.map.is-google .gm-style-iw-chr { margin-bottom: -28px; }
+.map.is-google .gm-ui-hover-effect > span { background-color: var(--ink-soft) !important; }
 .leaflet-container { font-family: var(--body); background: var(--sky); }
 .leaflet-tile-pane { filter: saturate(.75) sepia(.12) brightness(1.02); }
 @media (prefers-color-scheme: dark) {

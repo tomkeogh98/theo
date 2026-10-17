@@ -9,13 +9,13 @@
 //   • local flavour: what the region's food is famous for
 // The hand-written ideas (ideas.js) are still there for staying in, where a good idea
 // doesn't need to be local.
-import { getLoc, getPlaces } from "./locale.js?v=8";
-import { km, travel, NOT_PUBLIC, chainPenalty } from "./places.js?v=8";
-import { baseWhyNot, latestStart, openAt, startFor, clock } from "./when.js?v=8";
-import { adventureIdeas, getFood, steps as walkSteps, timeline, refuelFor, fmtMins } from "./adventures.js?v=8";
-import { getKnown } from "./knownfor.js?v=8";
-import { seasonalIdeas } from "./season.js?v=8";
-import { eventsFor, whenLabel } from "./events.js?v=8";
+import { getLoc, getPlaces } from "./locale.js?v=9";
+import { km, travel, NOT_PUBLIC, chainPenalty } from "./places.js?v=9";
+import { baseWhyNot, latestStart, openAt, startFor, clock } from "./when.js?v=9";
+import { adventureIdeas, getFood, steps as walkSteps, timeline, refuelFor, fmtMins } from "./adventures.js?v=9";
+import { getKnown } from "./knownfor.js?v=9";
+import { seasonalIdeas } from "./season.js?v=9";
+import { eventsFor, whenLabel } from "./events.js?v=9";
 
 const hash = (s) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) | 0, 0);
 const norm = (s) => s.toLowerCase().replace(/^the\s+/, "").replace(/[^a-z0-9]+/g, " ").trim();
@@ -40,7 +40,7 @@ export function foodNear(ll, maxKm) {
     out.push(p);
   };
   const KIDS = /soft ?play|play ?(centre|barn|zone)|kids|children|nursery|garden centre|services|petrol|filling station/i;
-  for (const p of getPlaces()) if (PLACE_KIND[p.cat] && !KIDS.test(p.n) && !NOT_PUBLIC.test(p.n)) add({ ...p, kind: PLACE_KIND[p.cat] === "restaurant" && /caf[eé]|coffee|tea ?room|bakery/i.test(p.n) ? "cafe" : PLACE_KIND[p.cat] });
+  for (const p of getPlaces()) if (PLACE_KIND[p.cat] && !KIDS.test(p.n) && !NOT_PUBLIC.test(p.n)) add({ ...p, kind: p.kind || (PLACE_KIND[p.cat] === "restaurant" && /caf[eé]|coffee|tea ?room|bakery/i.test(p.n) ? "cafe" : PLACE_KIND[p.cat]) });
   for (const f of getFood()) if (!KIDS.test(f.n) && !NOT_PUBLIC.test(f.n)) add({ ...f });
   return out;
 }

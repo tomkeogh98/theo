@@ -1,11 +1,12 @@
 // Star ratings, price level and opening hours from Google Places (needs a key in
-// 🔑 Connections). Two ways in: the most popular restaurants and bars around
-// wherever Theo is looking (attached to matching map places, or added if new),
-// and a one-off lookup when you open a pin or a postcard names a place.
+// 🔑 Connections). Two ways in: the most popular restaurants, bars, cafés, museums,
+// galleries, theatres and cinemas around wherever Theo is looking (attached to
+// matching map places, or added if new, so the map fills up even when OpenStreetMap
+// is down), and a one-off lookup when you open a pin or a postcard names a place.
 // Google's terms allow only short-term caching, so nothing is kept beyond 24 hours.
-import { getKeys } from "./keys.js?v=8";
-import { getLoc, getPlaces, getStatus, onChange, refresh } from "./locale.js?v=8";
-import { km } from "./places.js?v=8";
+import { getKeys } from "./keys.js?v=9";
+import { getLoc, getPlaces, getStatus, onChange, refresh } from "./locale.js?v=9";
+import { km } from "./places.js?v=9";
 
 const API = "https://places.googleapis.com/v1";
 const TTL = 24 * 3600e3;
@@ -30,12 +31,18 @@ function remember(k, d) {
   try { localStorage.setItem(STORE, JSON.stringify(store)); } catch { /* full: fine, it's only a cache */ }
 }
 
+// A free key gets about 100 searches of each kind a day. Once Google says no, rest
+// for an hour instead of asking again with every pin you open.
+const REST = "theo.google.rest";
+const resting = () => { try { return Date.now() < Number(localStorage.getItem(REST) || 0); } catch { return false; } };
 async function call(path, body) {
+  if (resting()) throw new Error("google 429 (resting)");
   const res = await fetch(`${API}/${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-Goog-Api-Key": getKeys().g, "X-Goog-FieldMask": FIELDS.map((f) => `places.${f}`).join(",") },
     body: JSON.stringify(body),
   });
+  if (res.status === 429) { try { localStorage.setItem(REST, String(Date.now() + 3600e3)); } catch { /* fine */ } }
   if (!res.ok) throw new Error(`google ${res.status}`);
   return (await res.json()).places || [];
 }
@@ -125,6 +132,19 @@ const NOT_WORLD = /british|american|hamburger|steak|fast_food|pub|bar|cafe|coffe
 const EATS = /restaurant|pub|bar|bistro|brasserie|steak_house|pizzeria|diner|gastropub|food_court|tapas|izakaya/;
 const NOT_EATS = /hotel|lodging|inn|motel|resort|farm|garden|store|shop|market|gas_station|fast_food|cafe|coffee|bakery|night_club/;
 
+// What a Google place is on Theo's map, or null if it isn't date material.
+function kindFor(d) {
+  const t = d.types;
+  if (t.includes("museum")) return { cat: "culture", tags: ["museum", "heritage"], b: d.type || "Museum" };
+  if (t.includes("art_gallery")) return { cat: "culture", tags: ["museum"], b: d.type || "Gallery" };
+  if (t.includes("performing_arts_theater")) return { cat: "stage", tags: ["theatre", "fringe", "comedy", "classical"], b: d.type || "Theatre" };
+  if (t.includes("movie_theater")) return { cat: "stage", tags: ["cinema"], b: d.type || "Cinema" };
+  if (/^(cafe|coffee_shop|tea_house|bakery|cat_cafe)$/.test(d.primary)) return { cat: "food", kind: "cafe", tags: ["brunch", "afternoon-tea"], b: d.type || "Café" };
+  // Google counts hotels, farm shops and garden centres with a café as "restaurants".
+  if (!EATS.test(d.primary) || NOT_EATS.test(d.primary)) return null;
+  return { ...tagsFor(d), b: d.type || "Restaurant" };
+}
+
 function tagsFor(d) {
   if (d.types.includes("pub")) return { cat: "pub", tags: ["pub", "drinks", "dinner"] };
   if (d.types.includes("bar") || d.types.includes("night_club")) return { cat: "drinks", tags: ["drinks"] };
@@ -135,45 +155,74 @@ function tagsFor(d) {
   return { cat: "food", tags };
 }
 
-let merged = "";
+// Fetched once per area (in parallel with OpenStreetMap, not after it), then merged
+// into whatever list of places Theo has: again whenever that list is replaced, so a
+// slow or failed OpenStreetMap load still ends up with Google's places on the map.
+// A free key is rationed, so the searches go one at a time, each set is kept as it
+// arrives, and any Google turned away are tried again a little later.
+const SETS = [["restaurant"], ["bar", "pub"], ["cafe", "coffee_shop", "tea_house"], ["museum", "art_gallery", "performing_arts_theater", "movie_theater"]];
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+let fetching = "";
+let retry = { key: "", tries: 0, timer: null };
 async function enrichArea() {
+  if (!hasKey()) return;
   const l = getLoc();
   const areaKey = `a:${l.ll[0].toFixed(2)},${l.ll[1].toFixed(2)}`;
-  if (!hasKey() || merged === areaKey || getStatus() !== "ready") return;
-  merged = areaKey;
-  let rows = store[areaKey]?.d;
-  if (!rows) {
+  const setKey = (i) => `${areaKey}:${i}`;
+  const merged = () => {
+    const rows = SETS.flatMap((_, i) => store[setKey(i)]?.d || []);
+    if (rows.length && merge(rows)) refresh();
+  };
+  const missing = SETS.map((_, i) => i).filter((i) => !store[setKey(i)]);
+  if (missing.length && fetching !== areaKey) {
+    fetching = areaKey;
     const radius = l.kind === "home" ? 12000 : (l.span || 0.08) <= 0.05 ? 3000 : 8000;
-    const near = (includedTypes) => call("places:searchNearby", {
-      includedTypes, maxResultCount: 20, rankPreference: "POPULARITY",
-      locationRestriction: { circle: { center: { latitude: l.ll[0], longitude: l.ll[1] }, radius } },
-    });
-    try {
-      const [food, drink] = await Promise.all([near(["restaurant"]), near(["bar", "pub"])]);
-      rows = [...food, ...drink].map(slim).filter((d) => d.ll);
-      remember(areaKey, rows);
-    } catch { merged = ""; return; }
+    let failed = false;
+    for (const i of missing) {
+      try {
+        const got = await call("places:searchNearby", {
+          includedTypes: SETS[i], maxResultCount: 20, rankPreference: "POPULARITY",
+          locationRestriction: { circle: { center: { latitude: l.ll[0], longitude: l.ll[1] }, radius } },
+        });
+        remember(setKey(i), got.map(slim).filter((d) => d.ll));
+        if (getLoc() === l) merged();
+      } catch { failed = true; }
+      if (getLoc() !== l) break;
+      await pause(450);
+    }
+    fetching = "";
+    if (failed && getLoc() === l) {
+      if (retry.key !== areaKey) retry = { key: areaKey, tries: 0, timer: null };
+      if (retry.tries < 4) {
+        clearTimeout(retry.timer);
+        retry.timer = setTimeout(enrichArea, 15000 * 2 ** retry.tries++);
+      }
+    }
   }
-  if (getLoc() !== l) return; // moved on while we were fetching
+  if (getLoc() === l) merged();
+}
+
+// Attach ratings to places already on the map and add the rest. Returns how many
+// changed, so merging the same rows twice doesn't set off another refresh.
+function merge(rows) {
   const places = getPlaces();
+  let changed = 0;
   for (const d of rows) {
     const n = norm(d.name);
     const match = places.find((p) => (norm(p.n) === n && km(p.ll, d.ll) < 0.3) || km(p.ll, d.ll) < 0.04 && (norm(p.n).includes(n) || n.includes(norm(p.n))));
-    if (match) { apply(match, d); continue; }
-    if (places.some((p) => p.id === `g-${d.gid}`)) continue;
-    // Only add proper places to eat and drink (Google counts hotels, farm shops and
-    // garden centres with a café as "restaurants").
-    if (!EATS.test(d.primary) || NOT_EATS.test(d.primary)) continue;
-    const { cat, tags } = tagsFor(d);
-    const p = { id: `g-${d.gid}`, n: d.name, cat, town: "", tags, ll: d.ll, b: d.type || "Restaurant", osm: true, google: true, q: 1 };
+    if (match) { if (match.g === undefined) { apply(match, d); changed++; } continue; }
+    const k = kindFor(d);
+    if (!k) continue;
+    const p = { id: `g-${d.gid}`, n: d.name, cat: k.cat, kind: k.kind, town: "", tags: k.tags, ll: d.ll, b: k.b, osm: true, google: true, q: 1 };
     apply(p, d);
     places.push(p);
+    changed++;
   }
-  refresh();
+  return changed;
 }
 
-onChange(({ status }) => { if (status === "ready") enrichArea(); });
-export function startRatings() { merged = ""; enrichArea(); }
+onChange(() => enrichArea());
+export function startRatings() { enrichArea(); }
 
 // Quick check that a key works: one tiny search near wherever Theo is looking.
 export async function testGoogle() {
